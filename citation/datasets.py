@@ -113,8 +113,8 @@ def random_coauthor_amazon_splits(data, num_classes, lcc_mask):
 
 
 def get_dataset(name, normalize_features=False, transform=None, edge_dropout=None, node_feature_dropout=None,
-                dissimilar_t = 1, cuda=False, permute_masks=None, lcc=False, split="full", self_loop=True,
-                dummy_nodes=0, removal_nodes=0):
+                dissimilar_t = 1, cuda=False, permute_masks=None, lcc=False, split="public", self_loop=True,
+                dummy_nodes=0, removal_nodes=0, substitute=True):
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
     if name in ['Computers', 'Photo']:
         dataset = Amazon(path, name)
@@ -256,10 +256,78 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
             if key not in dataset.slices:
                 dataset.slices[key] = torch.tensor([0, dataset.data[key].shape[0]])
 
+    if substitute:
+        adj = torch.tensor(coo_matrix(
+            (np.ones(dataset[0].num_edges),
+             (dataset[0].edge_index[0].numpy(), dataset[0].edge_index[1].numpy())),
+            shape=(dataset[0].num_nodes, dataset[0].num_nodes)).todense())
+
+        node_map = {}
+        adj2 = torch.zeros(adj.shape)
+        dataset.data.old_edge_index = dataset.data.edge_index
+        dataset.data.old_x = dataset.data.x
+        dataset.data.old_y = dataset.data.y
+        dataset.data.old_train_mask = dataset.data.train_mask
+        dataset.data.old_val_mask = dataset.data.val_mask
+        dataset.data.old_test_mask = dataset.data.test_mask
+
+        while (adj.sum(0) > 3).any():
+            asum = adj.sum(0).view(-1)
+            idx = (asum > 3).nonzero(as_tuple=True)[0][0]
+            num = asum[idx].int().item()
+            padding = torch.zeros(num, adj.shape[0])
+
+            loop_base = torch.zeros(num)
+            loop_base[1] = loop_base[-1] = 1
+            loop = []
+            for i in range(num):
+                loop.append(loop_base.roll(i, 0))
+            loop = torch.stack(loop, dim=0)
+
+            adj2 = torch.cat((adj2, padding), dim=0)
+            adj2 = torch.cat((adj2, torch.cat((padding.T, loop), dim=0)), dim=1)
+            adj2 = adj2[1:, 1:]
+
+            padding[torch.arange(num), adj[idx].nonzero(as_tuple=True)[0]] = 1
+            adj = torch.cat((adj, padding), dim=0)
+            zeros = torch.zeros(num, num)
+            # adj = torch.cat((adj, torch.cat((padding.T, zeros), dim=0)), dim=1)
+            adj = torch.cat((adj, torch.cat((padding.T, loop), dim=0)), dim=1)
+            adj = adj[torch.arange(adj.shape[0]) != idx]
+            adj = adj[:, torch.arange(adj.shape[0] + 1) != idx]
+
+            dataset.data.x = torch.cat((dataset.data.x[torch.arange(dataset.data.x.shape[0]) != idx],
+                                       dataset.data.old_x[idx].repeat(num,1)), dim=0)
+            dataset.data.y = torch.cat((dataset.data.y[torch.arange(dataset.data.y.shape[0]) != idx],
+                                        dataset.data.old_y[idx].repeat(num)), dim=0)
+
+            dataset.data.train_mask = torch.cat((dataset.data.train_mask[torch.arange(dataset.data.train_mask.shape[0]) != idx],
+                                        dataset.data.old_train_mask[idx].repeat(num)), dim=0)
+            dataset.data.val_mask = torch.cat((dataset.data.val_mask[torch.arange(dataset.data.val_mask.shape[0]) != idx],
+                                                 dataset.data.old_val_mask[idx].repeat(num)), dim=0)
+            dataset.data.test_mask = torch.cat((dataset.data.test_mask[torch.arange(dataset.data.test_mask.shape[0]) != idx],
+                                               dataset.data.old_test_mask[idx].repeat(num)), dim=0)
+
+
+            for nid in node_map:
+                node_map[nid] = node_map[nid]-1
+
+            node_map[idx.item()] = (torch.arange(num) + adj.shape[0] - num)
+
+
+        dataset.data.edge_index = adj.nonzero(as_tuple=False).T
+        dataset.data.edge_index2 = adj2.nonzero(as_tuple=False).T
+        dataset.data.node_map = node_map
+        dataset.data, dataset.slices = dataset.collate([dataset.data])
+        del dataset.__data_list__
+
     if cuda:
         dataset.data.to('cuda')
         if hasattr(dataset, '__data_list__') and dataset.__data_list__:
             for d in dataset.__data_list__:
                 d.to('cuda')
 
+    torch.save(dataset, './sparsified_graph.pt')
+
     return dataset
+    # return torch.load('./sparsified_graph.pt')

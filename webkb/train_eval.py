@@ -22,7 +22,7 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
 
     for _ in range(runs):
         # print('Runs:', _)
-        for split in range(data.train_mask.shape[0]):
+        for split in range(1):
             # print('Split:', split)
             model.to(device).reset_parameters()
             optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -37,8 +37,8 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
                 train(model, optimizer, data, split)
                 eval_info = evaluate(model, data, split)
                 eval_info['epoch'] = epoch
-                # if epoch % 1 == 0:
-                #     print(eval_info)
+                if epoch % 10 == 0:
+                    print(eval_info)
 
                 if logger is not None:
                     logger(eval_info)

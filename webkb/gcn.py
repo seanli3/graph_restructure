@@ -48,7 +48,13 @@ class Net(torch.nn.Module):
         x = F.relu(self.conv1(x, edge_index))
         x = F.dropout(x, p=args.dropout, training=self.training)
         x = self.conv2(x, edge_index)
-        return F.log_softmax(x, dim=1), x
+        new_x = torch.empty(data.y.shape[0], x.shape[1])
+        for i in range(new_x.shape[0]):
+            if i in data.node_map:
+                new_x[i] = x[data.node_map[i]].max(0)[0]
+            else:
+                new_x[i] = x[i]
+        return F.log_softmax(new_x, dim=1), new_x
 
 
 use_dataset = lambda : get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
