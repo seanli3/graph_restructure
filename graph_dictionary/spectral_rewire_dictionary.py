@@ -31,6 +31,7 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
 
     for _ in range(runs):
         print('Runs:', _)
+        model.reset_parameters()
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         t_start = time.perf_counter()
 
@@ -61,6 +62,7 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
                 eval_info_early_model = outs
                 eval_info_early_model['C'] = torch.clone(model.C.detach())
                 eval_info_early_model['W'] = torch.clone(model.W.detach())
+                eval_info_early_model['A'] = torch.clone(model.A.detach())
                 best_val_loss = np.min((best_val_loss, outs['val_loss']))
                 bad_counter = 0
             else:
@@ -84,11 +86,11 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
                  val_losses.std().item(),
                  duration.mean().item(),
                  eval_info_early_model['epoch']))
-
+    torch.save(eval_info_early_model, './best_model.pt')
     return eval_info_early_model
 
 
-eval_info_early_model = run(DATASET, DictNet, 1, 2000, 0.1, 0.005, 100)
+eval_info_early_model = run(DATASET, DictNet, 1, 2000, 0.01, 0.005, 100)
 
 
 # features_hat = eval_info_early_model['D'].mm(eval_info_early_model['C']).detach()

@@ -51,10 +51,12 @@ def matching_labels_distribution(dataset):
 
 def get_dataset(name, normalize_features=False, transform=None, edge_dropout=None, node_feature_dropout=None,
                 dissimilar_t = 1, cuda=False, permute_masks=None, lcc=False, self_loop=False,
-                dummy_nodes = 0, removal_nodes = 0):
+                edges_to_remove=None, edges_to_add=None, dummy_nodes = 0, removal_nodes = 0, features=None):
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
     dataset = WebKB(path, name)
     dataset.data.y = dataset.data.y.long()
+    if features is not None:
+        dataset.data.x = features
 
     if self_loop:
         dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]
@@ -96,7 +98,7 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
     #     dataset.data.test_mask = torch.cat(
     #         (dataset.data.test_mask[:, :max_degree_node], dataset.data.test_mask[:, max_degree_node + 1:]), dim=1)
     #     dataset.data.num_nodes = dataset.data.x.shape[0]
-    #     dataset.__data_list__ = None
+    #     dataset._data_list = None
     #     dataset.data, dataset.slices = dataset.collate([dataset.data])
     #     edge_index, edge_weight = get_laplacian(dataset.data.edge_index, normalization="sym")
     #     L = torch.sparse_coo_tensor(edge_index, edge_weight).to_dense()
@@ -126,7 +128,7 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
     #     dataset.data.test_mask = torch.cat((dataset.data.test_mask,
     #                                         torch.zeros(dataset.data.test_mask.shape[0], 1).bool()), dim=1)
     #     dataset.data.num_nodes = dataset.data.x.shape[0]
-    #     dataset.__data_list__ = None
+    #     dataset._data_list = None
     #     dataset.data, dataset.slices = dataset.collate([dataset.data])
     #
     #     # edge_index, edge_weight = get_laplacian(dataset.data.edge_index, normalization="sym")
@@ -192,52 +194,61 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
          (dataset[0].edge_index[0].numpy(), dataset[0].edge_index[1].numpy())),
         shape=(dataset[0].num_nodes, dataset[0].num_nodes)).todense())
 
-    node_map = {}
-    while (adj.sum(0) > 3).any():
-        asum = adj.sum(0).view(-1)
-        idx = (asum > 3).nonzero(as_tuple=True)[0][0]
-        num = asum[idx].int().item()
-        padding = torch.zeros(num, adj.shape[0])
-        padding[torch.arange(num), adj[idx].nonzero(as_tuple=True)[0]] = 1
-        adj = torch.cat((adj, padding), dim=0)
+    # node_map = {}
+    # while (adj.sum(0) > 3).any():
+    #     asum = adj.sum(0).view(-1)
+    #     idx = (asum > 3).nonzero(as_tuple=True)[0][0]
+    #     num = asum[idx].int().item()
+    #     padding = torch.zeros(num, adj.shape[0])
+    #     padding[torch.arange(num), adj[idx].nonzero(as_tuple=True)[0]] = 1
+    #     adj = torch.cat((adj, padding), dim=0)
+    #
+    #     # loop_base = torch.zeros(num)
+    #     # loop_base[1] = loop_base[-1] = 1
+    #     # loop = []
+    #     # for i in range(num):
+    #     #     loop.append(loop_base.roll(i, 0))
+    #     # loop = torch.stack(loop, dim=0)
+    #     loop = torch.zeros(num, num)
+    #
+    #     adj = torch.cat((adj, torch.cat((padding.T, loop), dim=0)), dim=1)
+    #     adj = adj[torch.arange(adj.shape[0]) != idx]
+    #     adj = adj[:, torch.arange(adj.shape[0] + 1) != idx]
+    #     dataset.data.x = torch.cat((dataset.data.x[torch.arange(dataset.data.x.shape[0]) != idx],
+    #                                dataset.data.x[idx].repeat(num,1)), dim=0)
+    #     # dataset.data.y = torch.cat((dataset.data.y[torch.arange(dataset.data.y.shape[0]) != idx],
+    #     #                             dataset.data.y[idx].repeat(num)), dim=0)
+    #     #
+    #     # dataset.data.train_mask = torch.cat((dataset.data.train_mask[:, torch.arange(dataset.data.train_mask.shape[1]) != idx],
+    #     #                             dataset.data.train_mask[:, idx].view(-1,1).repeat(1,num)), dim=1)
+    #     # dataset.data.val_mask = torch.cat((dataset.data.val_mask[:, torch.arange(dataset.data.val_mask.shape[1]) != idx],
+    #     #                                      dataset.data.val_mask[:, idx].view(-1, 1).repeat(1,num)), dim=1)
+    #     # dataset.data.test_mask = torch.cat((dataset.data.test_mask[:, torch.arange(dataset.data.test_mask.shape[1]) != idx],
+    #     #                                    dataset.data.test_mask[:, idx].view(-1, 1).repeat(1,num)), dim=1)
+    #     #
+    #
+    #     node_map[idx.item()] = (torch.arange(num) + adj.shape[0] - num).tolist()
 
-        # loop_base = torch.zeros(num)
-        # loop_base[1] = loop_base[-1] = 1
-        # loop = []
-        # for i in range(num):
-        #     loop.append(loop_base.roll(i, 0))
-        # loop = torch.stack(loop, dim=0)
-        loop = torch.zeros(num, num)
+    if edges_to_remove is not None:
+        for index in edges_to_remove:
+            adj[index[0], index[1]] = 0
+            adj[index[1], index[0]] = 0
 
-        adj = torch.cat((adj, torch.cat((padding.T, loop), dim=0)), dim=1)
-        adj = adj[torch.arange(adj.shape[0]) != idx]
-        adj = adj[:, torch.arange(adj.shape[0] + 1) != idx]
-        dataset.data.x = torch.cat((dataset.data.x[torch.arange(dataset.data.x.shape[0]) != idx],
-                                   dataset.data.x[idx].repeat(num,1)), dim=0)
-        # dataset.data.y = torch.cat((dataset.data.y[torch.arange(dataset.data.y.shape[0]) != idx],
-        #                             dataset.data.y[idx].repeat(num)), dim=0)
-        #
-        # dataset.data.train_mask = torch.cat((dataset.data.train_mask[:, torch.arange(dataset.data.train_mask.shape[1]) != idx],
-        #                             dataset.data.train_mask[:, idx].view(-1,1).repeat(1,num)), dim=1)
-        # dataset.data.val_mask = torch.cat((dataset.data.val_mask[:, torch.arange(dataset.data.val_mask.shape[1]) != idx],
-        #                                      dataset.data.val_mask[:, idx].view(-1, 1).repeat(1,num)), dim=1)
-        # dataset.data.test_mask = torch.cat((dataset.data.test_mask[:, torch.arange(dataset.data.test_mask.shape[1]) != idx],
-        #                                    dataset.data.test_mask[:, idx].view(-1, 1).repeat(1,num)), dim=1)
-        #
-
-        node_map[idx.item()] = (torch.arange(num) + adj.shape[0] - num).tolist()
-
+    if edges_to_add is not None:
+        for index in edges_to_add:
+            adj[index[0], index[1]] = 1
+            adj[index[1], index[0]] = 1
 
     dataset.data.edge_index = adj.nonzero(as_tuple=False).T
-    dataset.data.node_map = node_map
+    # dataset.data.node_map = node_map
     dataset.data, dataset.slices = dataset.collate([dataset.data])
-    del dataset.__data_list__
+    del dataset._data_list
     # assert (nx.is_connected(to_networkx(dataset[0]).to_undirected()))
 
     if cuda:
         dataset.data.to('cuda')
-        if hasattr(dataset, '__data_list__') and dataset.__data_list__:
-            for d in dataset.__data_list__:
+        if hasattr(dataset, '_data_list') and dataset._data_list:
+            for d in dataset._data_list:
                 d.to('cuda')
 
     return dataset

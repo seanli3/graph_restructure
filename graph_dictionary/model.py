@@ -7,6 +7,9 @@ import numpy as np
 import math
 from sklearn.linear_model import OrthogonalMatchingPursuit
 
+import warnings
+
+
 
 def check_symmetric(a):
     return check_equality(a, a.T)
@@ -28,11 +31,14 @@ def adj_to_lap(A, remove_self_loops=False):
     deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
     return torch.eye(A.shape[0]) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
 
+#
+# def create_filter(laplacian, b):
+#     return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
+#         (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
+#             torch.eye(laplacian.shape[0])).pinverse().matrix_power(2)
 
 def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
-        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-            torch.eye(laplacian.shape[0])).pinverse().matrix_power(2)
+    return torch.diag(torch.ones(laplacian.shape[0]) * b) - laplacian
 
 
 # # Text for the above functions
@@ -43,11 +49,13 @@ def create_filter(laplacian, b):
 # L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
 # assert check_equality(adj_to_lap(get_adjacency(edge_index)), L)
 
+def symmetric(X):
+    return X.triu() + X.triu(1).transpose(-1, -2)
 
 class DictNet(torch.nn.Module):
     def __init__(self, name, n_nonzero_coefs):
         super(DictNet, self).__init__()
-        dataset = get_dataset(name, normalize_features=True, self_loop=True)
+        dataset = get_dataset(name, normalize_features=True, self_loop=True, lcc=True)
         data = dataset[0]
         self.dataset = dataset
         self.data = data
@@ -58,8 +66,10 @@ class DictNet(torch.nn.Module):
         self.num_filters = math.ceil(2.1 / 0.25)
 
         self.W = torch.nn.Parameter(torch.Tensor(data.num_nodes, data.num_nodes))
-        self.C = None
+        self.C = torch.rand(9*data.num_nodes, data.x.shape[1])
+        self.A = None
         self.norm_y = torch.nn.functional.normalize(data.x, p=2, dim=0)
+        self.loss = torch.nn.MSELoss()
 
         # sample negative examples
         selectedNodes = set()
@@ -83,7 +93,6 @@ class DictNet(torch.nn.Module):
 
     def reset_parameters(self):
         self.W = torch.nn.Parameter(get_adjacency(self.data.edge_index))
-        torch.nn.init.sparse(self.L)
 
     def omp_step(self, D, y):
         # This will normalize atoms D
@@ -93,34 +102,42 @@ class DictNet(torch.nn.Module):
         # TODO: renormalize atoms D
         self.C = torch.FloatTensor(omp.coef_).T
 
-    def compute_loss(self, D, y):
+    def compute_loss(self, D, y, mask):
         y_hat = D.mm(self.C)
-        loss_1 = 0
-        # for group in self.negative_samples:
-        #     if len(group) > 0:
-        #         loss_1 -= y[group].var()
-        loss_2 = 0
-        #
-        # for i in range(self.dataset.num_classes):
-        #     if ((self.data.y == 1).logical_and(mask)!= 0).any():
-        #         loss_2 += y[(self.data.y == i).logical_and(mask).nonzero(as_tuple=True)[0]].var()
+        homophily_loss_1 = 0
+        for group in self.negative_samples:
+            if len(group) > 0:
+                homophily_loss_1 -= y[group].var()
+        homophily_loss_2 = 0
+
+        for i in range(self.dataset.num_classes):
+            if ((self.data.y == 1).logical_and(mask)!= 0).any():
+                homophily_loss_2 += y[(self.data.y == i).logical_and(mask).nonzero(as_tuple=True)[0]].var()
 
         # return torch.frobenius_norm(y - y_hat).pow(2) + torch.nn.functional.normalize(self.C, dim=1).norm(p=1) + loss_1 + loss_2
         beta_w = 1
-        recovery_loss = torch.frobenius_norm(y - y_hat).pow(2)
-        sparsity_loss = beta_w * self.W.norm(p=1)
+        beta_e = 1
+        beta_h = 10000
+        recovery_loss = self.loss(y, y_hat)
+        sparsity_loss = beta_w * self.W.norm(p=1, dim=1).mean()
         # The Frobenius norm of L is added to control the distribution of the edge weights and is inspired by the approach in [27].
-        # edge_weight_loss = beta * torch.frobenius_norm(self.L).pow(2)
-        edge_weight_loss = 0
+        # edge_weight_loss = beta_e * torch.frobenius_norm(self.L, dim=1).pow(2).mean()
+        edge_weight_loss =0
         laplacian_loss = 0
 
-        return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss
+        return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss + beta_h* (homophily_loss_2 + homophily_loss_1)
 
     def forward(self, mask):
-        L = adj_to_lap(self.W)
+        self.A = symmetric(self.W)
+        self.A.clip_(0).nan_to_num(0)
+        L = adj_to_lap(self.A)
+        if L.isnan().any():
+            raise Exception('nan in L')
         filters = [create_filter(L, b) for b in torch.arange(0, 2.1, 0.25)]
         D = torch.cat(filters, dim=1)
         y = self.data.x
-        self.omp_step(D, y)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.omp_step(D, y)
 
-        return self.compute_loss(D, y)
+        return self.compute_loss(D, y, mask)

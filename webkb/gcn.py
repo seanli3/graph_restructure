@@ -32,6 +32,10 @@ rseed(args.seed)
 nseed(args.seed)
 torch.manual_seed(args.seed)
 
+model = torch.load('./best_model.pt')
+edge_index = model['A'].nonzero().T
+edge_weight = model['A'][model['A'] != 0]
+
 
 class Net(torch.nn.Module):
     def __init__(self, dataset):
@@ -44,17 +48,15 @@ class Net(torch.nn.Module):
         self.conv2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        x = F.relu(self.conv1(x, edge_index))
+        x = data.x
+
+        edge_index = data.edge_index
+        # edge_index = torch.eye(x.shape[0], x.shape[0]).nonzero().T
+        edge_weight = None
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
         x = F.dropout(x, p=args.dropout, training=self.training)
-        x = self.conv2(x, edge_index)
-        new_x = torch.empty(data.y.shape[0], x.shape[1])
-        for i in range(new_x.shape[0]):
-            if i in data.node_map:
-                new_x[i] = x[data.node_map[i]].max(0)[0]
-            else:
-                new_x[i] = x[i]
-        return F.log_softmax(new_x, dim=1), new_x
+        x = self.conv2(x, edge_index, edge_weight)
+        return F.log_softmax(x, dim=1), x
 
 
 use_dataset = lambda : get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,

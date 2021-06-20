@@ -56,9 +56,8 @@ class Net(torch.nn.Module):
         torch.nn.init.xavier_uniform_(self.W2.data, gain=1.414)
 
     def forward(self, data):
-        x, edge_index, edge_index2 = data.x, data.edge_index, data.edge_index2
-        x = F.dropout(x, p=args.dropout, training=self.training)
-        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_weight
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
         # x1 = F.relu(self.conv1(x, edge_index))
         # x2 = F.relu(self.conv1(x, edge_index2))
         # x = x1.mm(self.W1[0]) + x2.mm(self.W1[1])
@@ -66,7 +65,7 @@ class Net(torch.nn.Module):
         # x1 = self.conv2(x, edge_index)
         # x2 = self.conv2(x, edge_index2)
         # x = x1.mm(self.W2[0]) + x2.mm(self.W2[1])
-        x = F.relu(self.conv2(x, edge_index))
+        x = F.relu(self.conv2(x, edge_index, edge_weight))
 
         # new_x = torch.empty(data.old_y.shape[0], x.shape[1])
         # for i in range(new_x.shape[0]):
