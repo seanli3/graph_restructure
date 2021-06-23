@@ -4,6 +4,7 @@ from random import seed as rseed
 from numpy.random import seed as nseed
 from webkb import get_dataset, run
 from torch import nn
+from torch_geometric.utils import get_laplacian
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
@@ -11,7 +12,7 @@ parser.add_argument('--random_splits', type=bool, default=False)
 parser.add_argument('--runs', type=int, default=1)
 parser.add_argument('--epochs', type=int, default=3000)
 parser.add_argument('--seed', type=int, default=729, help='Random seed.')
-parser.add_argument('--lr', type=float, default=0.0001)
+parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--weight_decay', type=float, default=7.530100210192558e-05)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--hidden1', type=int, default=256)
@@ -36,6 +37,16 @@ torch.manual_seed(args.seed)
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
+model = torch.load('../webkb/best_model.pt')
+C = model['C']
+C = C.clip(min=0)
+C = C / C.sum(0)
+
+
+def create_filter(laplacian, b):
+    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
+        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
+            torch.eye(laplacian.shape[0])).matrix_power(-2)
 
 if args.cuda:
     print("-----------------------Training on CUDA-------------------------")
@@ -54,14 +65,20 @@ class Net(torch.nn.Module):
                                     # nn.ReLU(inplace=True),
                                     nn.LogSoftmax(dim=1))
 
+        data = dataset[0]
+        L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
+        laplacian = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
+        self.filters = [create_filter(laplacian, b).mm(data.x) for b in torch.arange(0, 2.1, 0.25)]
+        self.D = torch.stack(self.filters, dim=2)
+        self.x = self.D.matmul(C).squeeze()
+
     def reset_parameters(self):
         for layer in self.layers:
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
 
     def forward(self, data):
-        x = data.x
-        return self.layers(x), None, None
+        return self.layers(self.x), None, None
 
 permute_masks = None
 

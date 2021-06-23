@@ -2,18 +2,12 @@ import torch
 import torch.nn.functional as F
 from numpy.random import seed as nseed
 from webkb import get_dataset
-from citation import get_dataset as get_citation_data, run as run_citation
+from torch_geometric.utils import get_laplacian
 import numpy as np
 import math
-from sklearn.linear_model import OrthogonalMatchingPursuit
-
-import warnings
-
-
 
 def check_symmetric(a):
     return check_equality(a, a.T)
-
 
 def check_equality(a, b, rtol=1e-05, atol=1e-03):
     return np.allclose(a, b, rtol=rtol, atol=atol)
@@ -31,14 +25,14 @@ def adj_to_lap(A, remove_self_loops=False):
     deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
     return torch.eye(A.shape[0]) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
 
-#
-# def create_filter(laplacian, b):
-#     return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
-#         (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-#             torch.eye(laplacian.shape[0])).pinverse().matrix_power(2)
 
 def create_filter(laplacian, b):
-    return torch.diag(torch.ones(laplacian.shape[0]) * b) - laplacian
+    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
+        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
+            torch.eye(laplacian.shape[0])).matrix_power(-2)
+
+# def create_filter(laplacian, b):
+#     return torch.diag(torch.ones(laplacian.shape[0]) * b) - laplacian
 
 
 # # Text for the above functions
@@ -52,10 +46,31 @@ def create_filter(laplacian, b):
 def symmetric(X):
     return X.triu() + X.triu(1).transpose(-1, -2)
 
+def sample_negative(num_classes, mask, y):
+    negative_samples = []
+    selectedNodes = set()
+    for _ in range(len(mask.nonzero(as_tuple=True)[0])):
+        nodes = []
+        for i in range(num_classes):
+            if y[mask].bincount()[i] <= len(negative_samples):
+                continue
+            iter = 0
+            while True:
+                iter += 1
+                n = np.random.choice((y == i).logical_and(mask).nonzero(as_tuple=True)[0])
+                if n not in selectedNodes:
+                    selectedNodes.add(n)
+                    nodes.append(n)
+                    break
+                if iter > 100:
+                    break
+        negative_samples.append(nodes)
+    return negative_samples
+
 class DictNet(torch.nn.Module):
     def __init__(self, name, n_nonzero_coefs):
         super(DictNet, self).__init__()
-        dataset = get_dataset(name, normalize_features=True, self_loop=True, lcc=True)
+        dataset = get_dataset(name, normalize_features=True, self_loop=True)
         data = dataset[0]
         self.dataset = dataset
         self.data = data
@@ -63,81 +78,66 @@ class DictNet(torch.nn.Module):
 
         self.train_mask = data.train_mask[0]
         self.val_mask = data.val_mask[0]
+        self.val_mask = data.val_mask[0]
         self.num_filters = math.ceil(2.1 / 0.25)
 
-        self.W = torch.nn.Parameter(torch.Tensor(data.num_nodes, data.num_nodes))
-        self.C = torch.rand(9*data.num_nodes, data.x.shape[1])
+        L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
+        self.L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
+        # self.W = torch.nn.Embedding(data.num_nodes, data.num_nodes)
+        self.C = torch.nn.Embedding(9,1)
         self.A = None
         self.norm_y = torch.nn.functional.normalize(data.x, p=2, dim=0)
         self.loss = torch.nn.MSELoss()
+        self.filters = [create_filter(self.L, b).mm(data.x) for b in torch.arange(0, 2.1, 0.25)]
+        self.D = torch.stack(self.filters, dim=2)
 
         # sample negative examples
-        selectedNodes = set()
-        self.negative_samples = []
-        for _ in range(math.ceil(len(self.train_mask.nonzero(as_tuple=True)[0]) / dataset.num_classes)):
-            nodes = []
-            for i in range(dataset.num_classes):
-                if data.y[self.train_mask].bincount()[i] <= len(self.negative_samples):
-                    continue
-                iter = 0
-                while True:
-                    iter += 1
-                    n = np.random.choice((data.y == i).logical_and(self.train_mask).nonzero(as_tuple=True)[0])
-                    if n not in selectedNodes:
-                        selectedNodes.add(n)
-                        nodes.append(n)
-                        break
-                    if iter > 100:
-                        break
-            self.negative_samples.append(nodes)
+        self.train_negative_samples = sample_negative(dataset.num_classes, self.train_mask, data.y)
+        self.val_negative_samples = sample_negative(dataset.num_classes, self.val_mask, data.y)
 
     def reset_parameters(self):
-        self.W = torch.nn.Parameter(get_adjacency(self.data.edge_index))
-
-    def omp_step(self, D, y):
-        # This will normalize atoms D
-        omp = OrthogonalMatchingPursuit(n_nonzero_coefs=self.n_nonzero_coefs)
-        D = torch.nn.functional.normalize(D.detach(), p=2, dim=0)
-        omp.fit(D, self.norm_y)
-        # TODO: renormalize atoms D
-        self.C = torch.FloatTensor(omp.coef_).T
+        # self.W.weight = torch.nn.Parameter(get_adjacency(self.data.edge_index))
+        torch.nn.init.xavier_normal_(self.C.weight, 0.6)
 
     def compute_loss(self, D, y, mask):
-        y_hat = D.mm(self.C)
+        C = self.C.weight.clip(min=0)
+        C = C / C.sum(0)
+        y_hat = self.D.matmul(C).squeeze()
         homophily_loss_1 = 0
-        for group in self.negative_samples:
-            if len(group) > 0:
-                homophily_loss_1 -= y[group].var()
-        homophily_loss_2 = 0
+        if self.training:
+            negative_samples = self.train_negative_samples
+        else:
+            negative_samples = self.val_negative_samples
 
+        for group in negative_samples:
+            if len(group) > 1:
+                homophily_loss_1 -= y_hat[group].var(dim=0).mean()
+
+        homophily_loss_2 = 0
         for i in range(self.dataset.num_classes):
             if ((self.data.y == 1).logical_and(mask)!= 0).any():
-                homophily_loss_2 += y[(self.data.y == i).logical_and(mask).nonzero(as_tuple=True)[0]].var()
+                homophily_loss_2 += y_hat[(self.data.y == i).logical_and(mask).nonzero(as_tuple=True)[0]].var(dim=0).mean()
 
         # return torch.frobenius_norm(y - y_hat).pow(2) + torch.nn.functional.normalize(self.C, dim=1).norm(p=1) + loss_1 + loss_2
         beta_w = 1
         beta_e = 1
-        beta_h = 10000
+        beta_h = 1
         recovery_loss = self.loss(y, y_hat)
-        sparsity_loss = beta_w * self.W.norm(p=1, dim=1).mean()
+        # sparsity_loss = beta_w * self.A.norm(p=1, dim=1).mean()
+        sparsity_loss = beta_w * self.C.weight.norm(p=1, dim=1).mean()
         # The Frobenius norm of L is added to control the distribution of the edge weights and is inspired by the approach in [27].
         # edge_weight_loss = beta_e * torch.frobenius_norm(self.L, dim=1).pow(2).mean()
         edge_weight_loss =0
         laplacian_loss = 0
 
-        return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss + beta_h* (homophily_loss_2 + homophily_loss_1)
+        return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss + 10*homophily_loss_2 + 0.1*homophily_loss_1
 
     def forward(self, mask):
-        self.A = symmetric(self.W)
-        self.A.clip_(0).nan_to_num(0)
-        L = adj_to_lap(self.A)
-        if L.isnan().any():
-            raise Exception('nan in L')
-        filters = [create_filter(L, b) for b in torch.arange(0, 2.1, 0.25)]
-        D = torch.cat(filters, dim=1)
+        # self.A = symmetric(self.W.weight)
+        # self.A.clip_(0).nan_to_num(0)
+        # L = adj_to_lap(self.A)
+        # if L.isnan().any():
+        #     raise Exception('nan in L')
         y = self.data.x
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            self.omp_step(D, y)
 
-        return self.compute_loss(D, y, mask)
+        return self.compute_loss(self.D, y, mask)
