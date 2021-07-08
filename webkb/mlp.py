@@ -17,10 +17,10 @@ parser.add_argument('--weight_decay', type=float, default=7.530100210192558e-05)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--hidden1', type=int, default=256)
 parser.add_argument('--hidden2', type=int, default=128)
-parser.add_argument('--dropout', type=float, default=0.6174883141474811)
+parser.add_argument('--dropout', type=float, default=0.4)
 parser.add_argument('--normalize_features', type=bool, default=True)
 parser.add_argument('--lcc', type=bool, default=False)
-parser.add_argument('--pre_training', action='store_true')
+parser.add_argument('--pre_training', type=bool, default=False)
 parser.add_argument('--cuda', action='store_true')
 parser.add_argument('--edge_dropout', type=float, default=0)
 parser.add_argument('--node_feature_dropout', type=float, default=0)
@@ -37,12 +37,6 @@ torch.manual_seed(args.seed)
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
-model = torch.load('../webkb/best_model.pt')
-C = model['C']
-C = C.clip(min=0)
-C = C / C.sum(0)
-
-
 def create_filter(laplacian, b):
     return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
         (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
@@ -53,37 +47,42 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-class Net(torch.nn.Module):
-    def __init__(self, dataset):
-        super(Net, self).__init__()
-        self.layers = nn.Sequential(nn.Linear(dataset[0].num_node_features, args.hidden1),
-                                    nn.Dropout(args.dropout),
-                                    nn.Linear(args.hidden1, args.hidden2),
-                                    nn.Dropout(args.dropout),
-                                    nn.Linear(args.hidden2, dataset.num_classes),
-                                    nn.ELU(inplace=True),
-                                    # nn.ReLU(inplace=True),
-                                    nn.LogSoftmax(dim=1))
 
-        data = dataset[0]
-        L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
-        laplacian = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
-        self.filters = [create_filter(laplacian, b).mm(data.x) for b in torch.arange(0, 2.1, 0.25)]
-        self.D = torch.stack(self.filters, dim=2)
-        self.x = self.D.matmul(C).squeeze()
+for split in range(10):
+    model = torch.load('./{}_best_model_split_{}.pt'.format(args.dataset, split))
+    C = model['C']
 
-    def reset_parameters(self):
-        for layer in self.layers:
-            if hasattr(layer, 'reset_parameters'):
-                layer.reset_parameters()
+    class Net(torch.nn.Module):
+        def __init__(self, dataset):
+            super(Net, self).__init__()
+            self.layers = nn.Sequential(nn.Linear(dataset[0].num_node_features, args.hidden1),
+                                        nn.Dropout(args.dropout),
+                                        nn.Linear(args.hidden1, args.hidden2),
+                                        nn.Dropout(args.dropout),
+                                        nn.Linear(args.hidden2, dataset.num_classes),
+                                        nn.ELU(inplace=True),
+                                        # nn.ReLU(inplace=True),
+                                        nn.LogSoftmax(dim=1))
 
-    def forward(self, data):
-        return self.layers(self.x), None, None
+            data = dataset[0]
+            L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
+            laplacian = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
+            self.filters = [create_filter(laplacian, b).mm(data.x) for b in torch.arange(0, 2.1, 0.2)]
+            self.D = torch.cat(self.filters, dim=1)
+            self.x = self.D.mm(C)
 
-permute_masks = None
+        def reset_parameters(self):
+            for layer in self.layers:
+                if hasattr(layer, 'reset_parameters'):
+                    layer.reset_parameters()
 
-use_dataset = lambda : get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
-                                    permute_masks=permute_masks, cuda=args.cuda, lcc=args.lcc,
-                                    node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t)
+        def forward(self, data):
+            return self.layers(self.x), None, None
 
-run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience)
+    permute_masks = None
+
+    use_dataset = lambda : get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
+                                        permute_masks=permute_masks, cuda=args.cuda, lcc=args.lcc,
+                                        node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t)
+
+    run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, split=split)

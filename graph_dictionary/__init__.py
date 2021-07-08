@@ -1,7 +1,5 @@
-from . import gcn, gcn_laplacian, model
+from . import model
 
 __all__ = [
-    'gcn',
-    'gcn_laplacian',
     'model'
 ]

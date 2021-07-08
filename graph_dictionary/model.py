@@ -65,31 +65,29 @@ def sample_negative(num_classes, mask, y):
                 if iter > 100:
                     break
         negative_samples.append(nodes)
-    return negative_samples
+    return list(filter(lambda s: len(s) > 1, negative_samples))
 
 class DictNet(torch.nn.Module):
-    def __init__(self, name, n_nonzero_coefs):
+    def __init__(self, name, split):
         super(DictNet, self).__init__()
         dataset = get_dataset(name, normalize_features=True, self_loop=True)
         data = dataset[0]
         self.dataset = dataset
         self.data = data
-        self.n_nonzero_coefs = n_nonzero_coefs
 
-        self.train_mask = data.train_mask[0]
-        self.val_mask = data.val_mask[0]
-        self.val_mask = data.val_mask[0]
-        self.num_filters = math.ceil(2.1 / 0.25)
+        self.train_mask = data.train_mask[split]
+        self.val_mask = data.val_mask[split]
 
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         self.L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
         # self.W = torch.nn.Embedding(data.num_nodes, data.num_nodes)
-        self.C = torch.nn.Embedding(9,1)
+        self.filters = [create_filter(self.L, b).mm(data.x) for b in torch.arange(0, 2.1, 0.1)]
+        self.C = torch.nn.Parameter(torch.empty(len(self.filters), 1))
         self.A = None
-        self.norm_y = torch.nn.functional.normalize(data.x, p=2, dim=0)
+        # self.norm_y = torch.nn.functional.normalize(data.x, p=2, dim=0)
         self.loss = torch.nn.MSELoss()
-        self.filters = [create_filter(self.L, b).mm(data.x) for b in torch.arange(0, 2.1, 0.25)]
         self.D = torch.stack(self.filters, dim=2)
+        self.I = torch.eye(dataset[0].num_nodes)
 
         # sample negative examples
         self.train_negative_samples = sample_negative(dataset.num_classes, self.train_mask, data.y)
@@ -97,12 +95,15 @@ class DictNet(torch.nn.Module):
 
     def reset_parameters(self):
         # self.W.weight = torch.nn.Parameter(get_adjacency(self.data.edge_index))
-        torch.nn.init.xavier_normal_(self.C.weight, 0.6)
+        torch.nn.init.xavier_normal_(self.C, 0.6)
 
-    def compute_loss(self, D, y, mask):
-        C = self.C.weight.clip(min=0)
-        C = C / C.sum(0)
-        y_hat = self.D.matmul(C).squeeze()
+    def compute_loss(self, D, x, mask):
+        # C = self.C.clip(min=0)
+        # C = C / C.sum(0)
+        # C = torch.nn.functional.normalize(self.C, dim=0, p=2)
+        C = self.C
+
+        y_hat = D.matmul(C).squeeze()
         homophily_loss_1 = 0
         if self.training:
             negative_samples = self.train_negative_samples
@@ -110,27 +111,35 @@ class DictNet(torch.nn.Module):
             negative_samples = self.val_negative_samples
 
         for group in negative_samples:
-            if len(group) > 1:
-                homophily_loss_1 -= y_hat[group].var(dim=0).mean()
+            y_hat_group = y_hat[group]
+            homophily_loss_1 -= torch.cdist(y_hat_group, y_hat_group).mean()
+            # homophily_loss_1 -= torch.var(y_hat_group, dim=0).mean()
 
         homophily_loss_2 = 0
         for i in range(self.dataset.num_classes):
-            if ((self.data.y == 1).logical_and(mask)!= 0).any():
-                homophily_loss_2 += y_hat[(self.data.y == i).logical_and(mask).nonzero(as_tuple=True)[0]].var(dim=0).mean()
+            if ((self.data.y == i).logical_and(mask)).any():
+                y_hat_group = y_hat[(self.data.y == i).logical_and(mask)]
+                homophily_loss_2 += torch.cdist(y_hat_group, y_hat_group).mean()
+                # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
+
+        beta = len(negative_samples)/self.dataset.num_classes
 
         # return torch.frobenius_norm(y - y_hat).pow(2) + torch.nn.functional.normalize(self.C, dim=1).norm(p=1) + loss_1 + loss_2
         beta_w = 1
         beta_e = 1
         beta_h = 1
-        recovery_loss = self.loss(y, y_hat)
+        # recovery_loss = self.loss(y, y_hat)
+        recovery_loss = 0
         # sparsity_loss = beta_w * self.A.norm(p=1, dim=1).mean()
-        sparsity_loss = beta_w * self.C.weight.norm(p=1, dim=1).mean()
+        # sparsity_loss = beta_w * self.C.weight.norm(p=1)
+        dimensions =torch.sqrt(torch.tensor(float(C.shape[0])))
+        sparsity_loss = torch.mean((dimensions - C.norm(p=1, dim=0)/C.norm(p=2, dim=0))/(dimensions - 1))
         # The Frobenius norm of L is added to control the distribution of the edge weights and is inspired by the approach in [27].
         # edge_weight_loss = beta_e * torch.frobenius_norm(self.L, dim=1).pow(2).mean()
         edge_weight_loss =0
         laplacian_loss = 0
 
-        return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss + 10*homophily_loss_2 + 0.1*homophily_loss_1
+        return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss + homophily_loss_2 + homophily_loss_1/beta
 
     def forward(self, mask):
         # self.A = symmetric(self.W.weight)
@@ -138,6 +147,6 @@ class DictNet(torch.nn.Module):
         # L = adj_to_lap(self.A)
         # if L.isnan().any():
         #     raise Exception('nan in L')
-        y = self.data.x
+        x = self.data.x
 
-        return self.compute_loss(self.D, y, mask)
+        return self.compute_loss(self.D, x, mask)
