@@ -8,11 +8,12 @@ from torch import tensor
 from torch.optim import Adam
 from sklearn.metrics import f1_score
 import numpy as np
+from tqdm import tqdm
 # from torch_sparse import spmm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None):
+def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None, split=0):
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
     dataset = use_dataset()
     data = dataset[0]
@@ -21,52 +22,59 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
         torch.cuda.synchronize()
 
     for _ in range(runs):
-        # print('Runs:', _)
-        for split in range(1):
-            # print('Split:', split)
-            model.to(device).reset_parameters()
-            optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-            t_start = time.perf_counter()
+        print('Runs:', _)
+        print('Split:', split)
+        model.to(device).reset_parameters()
+        optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        t_start = time.perf_counter()
 
-            best_val_loss = float('inf')
-            best_val_acc = float(0)
-            eval_info_early_model = None
-            bad_counter = 0
+        best_val_loss = float('inf')
+        best_val_acc = float(0)
+        eval_info_early_model = None
+        bad_counter = 0
 
-            for epoch in range(1, epochs + 1):
-                train(model, optimizer, data, split)
-                eval_info = evaluate(model, data, split)
-                eval_info['epoch'] = epoch
-                if epoch % 10 == 0:
-                    print(eval_info)
 
-                if logger is not None:
-                    logger(eval_info)
+        pbar = tqdm(range(0, epochs))
+        for epoch in pbar:
+            train(model, optimizer, data, split)
+            eval_info = evaluate(model, data, split)
+            eval_info['epoch'] = epoch
+            pbar.set_description(
+                'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
+                'test loss: {:.2f}, test acc: {:.4f}'
+                    .format(
+                        epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
+                        eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
+                    )
+            )
 
-                if eval_info['val_acc'] > best_val_acc or eval_info['val_loss'] < best_val_loss:
-                    if eval_info['val_acc'] >= best_val_acc and eval_info['val_loss'] <= best_val_loss:
-                        eval_info_early_model = eval_info
-                        # torch.save(model.state_dict(), './best_{}_single_dec_split_{}.pkl'.format(dataset.name, split))
-                    best_val_acc = np.max((best_val_acc, eval_info['val_acc']))
-                    best_val_loss = np.min((best_val_loss, eval_info['val_loss']))
-                    bad_counter = 0
-                else:
-                    bad_counter += 1
-                    if bad_counter == patience:
-                        break
+            if logger is not None:
+                logger(eval_info)
 
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+            if eval_info['val_acc'] > best_val_acc or eval_info['val_loss'] < best_val_loss:
+                if eval_info['val_acc'] >= best_val_acc and eval_info['val_loss'] <= best_val_loss:
+                    eval_info_early_model = eval_info
+                    # torch.save(model.state_dict(), './best_{}_single_dec_split_{}.pkl'.format(dataset.name, split))
+                best_val_acc = np.max((best_val_acc, eval_info['val_acc']))
+                best_val_loss = np.min((best_val_loss, eval_info['val_loss']))
+                bad_counter = 0
+            else:
+                bad_counter += 1
+                if bad_counter == patience:
+                    break
 
-            t_end = time.perf_counter()
-            durations.append(t_end - t_start)
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
 
-            val_losses.append(eval_info_early_model['val_loss'])
-            train_accs.append(eval_info_early_model['train_acc'])
-            val_accs.append(eval_info_early_model['val_acc'])
-            test_accs.append(eval_info_early_model['test_acc'])
-            test_macro_f1s.append(eval_info_early_model['test_macro_f1'])
-            durations.append(t_end - t_start)
+        t_end = time.perf_counter()
+        durations.append(t_end - t_start)
+
+        val_losses.append(eval_info_early_model['val_loss'])
+        train_accs.append(eval_info_early_model['train_acc'])
+        val_accs.append(eval_info_early_model['val_acc'])
+        test_accs.append(eval_info_early_model['test_acc'])
+        test_macro_f1s.append(eval_info_early_model['test_macro_f1'])
+        durations.append(t_end - t_start)
 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, duration = tensor(val_losses), tensor(train_accs), tensor(val_accs), \
                                                             tensor(test_accs), tensor(test_macro_f1s), tensor(durations)
