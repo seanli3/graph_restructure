@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 # %%
 
-DATASET = 'Chameleon'
+DATASET = 'Squirrel'
 
 seed = 42
 np.random.seed(seed)
@@ -14,13 +14,9 @@ torch.manual_seed(seed)
 
 
 def run(name, Model, runs, epochs, lr, weight_decay, patience):
-    val_losses, durations = [], []
-    model = Model(name, 5)
-    dataset = model.dataset
-    data = model.data
-
-    for _ in range(runs):
-        print('Runs:', _)
+    for split in range(10):
+        print('Split:', split)
+        model = Model(name, split)
         model.reset_parameters()
 
         best_val_loss = float('inf')
@@ -31,8 +27,8 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
         for epoch in pbar:
             model.train()
             # Predict and calculate loss for user factor and bias
-            optimizer = torch.optim.Adam([model.C.weight], lr=0.001,
-                                        weight_decay=1e-5)  # learning rate
+            optimizer = torch.optim.Adam([model.C], lr=lr,
+                                        weight_decay=weight_decay)  # learning rate
             loss = model(model.train_mask)
             # Backpropagate
             loss.backward()
@@ -41,7 +37,7 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
             optimizer.zero_grad()
 
             # # predict and calculate loss for item factor and bias
-            # optimizer = torch.optim.SGD([model.W.weight], lr=1,
+            # optimizer = torch.optim.SGD([model.W], lr=1,
             #                             weight_decay=1e-5)  # learning rate
             # loss = model(model.train_mask)
             # # Backpropagate
@@ -54,19 +50,19 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
             model.eval()
             with torch.no_grad():
                 val_loss = model(model.val_mask)
-            pbar.set_description('Epoch: {}, training loss: {}, validation loss: {}'.format(epoch, loss.item(), val_loss.item()))
+            pbar.set_description('Epoch: {}, training loss: {:.2f}, validation loss: {:.2f}'.format(epoch, loss.item(), val_loss.item()))
 
 
             if val_loss < best_val_loss:
                 eval_info_early_model['train_loss'] = loss
                 eval_info_early_model['val_loss'] = val_loss
                 eval_info_early_model['epoch'] = epoch
-                eval_info_early_model['C'] = torch.clone(model.C.weight.detach())
-                # eval_info_early_model['W'] = torch.clone(model.W.weight.detach())
+                eval_info_early_model['C'] = torch.clone(model.C.detach())
+                # eval_info_early_model['W'] = torch.clone(model.W.detach())
                 # eval_info_early_model['A'] = torch.clone(model.A.detach())
                 best_val_loss = val_loss
                 bad_counter = 0
-                torch.save(eval_info_early_model, './best_model.pt')
+                torch.save(eval_info_early_model, './{}_best_model_split_{}.pt'.format(DATASET, split))
             else:
                 bad_counter += 1
                 if bad_counter == patience:
@@ -78,7 +74,8 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
     return eval_info_early_model
 
 
-eval_info_early_model = run(DATASET, DictNet, 1, 2000, 0.01, 0.005, 100)
+eval_info_early_model = run(DATASET, DictNet, 1, 1000, 0.005, 0.0005, 10)
+print()
 
 
 # features_hat = eval_info_early_model['D'].mm(eval_info_early_model['C']).detach()
