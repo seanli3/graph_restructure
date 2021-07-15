@@ -8,19 +8,20 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
+parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
 
 DATASET = args.dataset
 
 print(DATASET)
 
-cuda = False
+args.cuda = args.cuda and torch.cuda.is_available()
 
 seed = 42
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-if cuda:
+if args.cuda:
     print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(seed)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -33,7 +34,7 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
         splits = 10
     for split in range(splits):
         print('Split:', split)
-        model = Model(name, split)
+        model = Model(name, split, cuda=args.cuda)
         model.reset_parameters()
 
         best_val_loss = float('inf')

@@ -106,4 +106,4 @@ def use_dataset(split):
             node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t,
             dummy_nodes = args.dummy_nodes, removal_nodes = args.removal_nodes, cuda=args.cuda)
 
-run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience)
+run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, cuda=args.cuda)

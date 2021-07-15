@@ -11,9 +11,8 @@ import numpy as np
 from tqdm import tqdm
 # from torch_sparse import spmm
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None):
+def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None, cuda=False):
+    device = torch.device('cuda' if cuda else 'cpu')
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
     if torch.cuda.is_available():
         torch.cuda.synchronize()
