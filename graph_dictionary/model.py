@@ -1,10 +1,12 @@
 import torch
 import torch.nn.functional as F
 from numpy.random import seed as nseed
-from webkb import get_dataset
 from torch_geometric.utils import get_laplacian
 import numpy as np
 import math
+from torch import nn
+
+cuda=True
 
 def check_symmetric(a):
     return check_equality(a, a.T)
@@ -57,7 +59,7 @@ def sample_negative(num_classes, mask, y):
             iter = 0
             while True:
                 iter += 1
-                n = np.random.choice((y == i).logical_and(mask).nonzero(as_tuple=True)[0])
+                n = np.random.choice((y.cpu() == i).logical_and(mask.cpu()).nonzero(as_tuple=True)[0])
                 if n not in selectedNodes:
                     selectedNodes.add(n)
                     nodes.append(n)
@@ -70,19 +72,29 @@ def sample_negative(num_classes, mask, y):
 class DictNet(torch.nn.Module):
     def __init__(self, name, split):
         super(DictNet, self).__init__()
-        dataset = get_dataset(name, normalize_features=True, self_loop=True)
+        if name.lower() in ['cora', 'citeseer', 'pubmed']:
+            from citation import get_dataset
+        else:
+            from webkb import get_dataset
+
+        dataset = get_dataset(name, normalize_features=True, self_loop=True, cuda=cuda)
         data = dataset[0]
         self.dataset = dataset
         self.data = data
 
-        self.train_mask = data.train_mask[split]
-        self.val_mask = data.val_mask[split]
+        if name.lower() in ['cora', 'citeseer', 'pubmed']:
+            self.train_mask = data.train_mask
+            self.val_mask = data.val_mask
+        else:
+            self.train_mask = data.train_mask[split]
+            self.val_mask = data.val_mask[split]
 
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         self.L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
         # self.W = torch.nn.Embedding(data.num_nodes, data.num_nodes)
-        self.filters = [create_filter(self.L, b).mm(data.x) for b in torch.arange(0, 2.1, 0.1)]
+        self.filters = [create_filter(self.L, b) for b in torch.arange(0, 2.1, 0.15)]
         self.C = torch.nn.Parameter(torch.empty(len(self.filters), 1))
+
         self.A = None
         # self.norm_y = torch.nn.functional.normalize(data.x, p=2, dim=0)
         self.loss = torch.nn.MSELoss()
@@ -98,12 +110,9 @@ class DictNet(torch.nn.Module):
         torch.nn.init.xavier_normal_(self.C, 0.6)
 
     def compute_loss(self, D, x, mask):
-        # C = self.C.clip(min=0)
-        # C = C / C.sum(0)
-        # C = torch.nn.functional.normalize(self.C, dim=0, p=2)
         C = self.C
-
-        y_hat = D.matmul(C).squeeze()
+        L_hat = D.matmul(C).squeeze()
+        y_hat = (self.I - L_hat).mm(self.data.x)
         homophily_loss_1 = 0
         if self.training:
             negative_samples = self.train_negative_samples
@@ -113,7 +122,6 @@ class DictNet(torch.nn.Module):
         for group in negative_samples:
             y_hat_group = y_hat[group]
             homophily_loss_1 -= torch.cdist(y_hat_group, y_hat_group).mean()
-            # homophily_loss_1 -= torch.var(y_hat_group, dim=0).mean()
 
         homophily_loss_2 = 0
         for i in range(self.dataset.num_classes):

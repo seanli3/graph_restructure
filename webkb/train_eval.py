@@ -13,68 +13,72 @@ from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None, split=0):
+def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None):
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
-    dataset = use_dataset()
-    data = dataset[0]
-    model = Model(dataset)
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
     for _ in range(runs):
         print('Runs:', _)
-        print('Split:', split)
-        model.to(device).reset_parameters()
-        optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        t_start = time.perf_counter()
+        for split in range(10):
+            print('Split:', split)
+        
+            dataset = use_dataset(split)
+            data = dataset[0]
 
-        best_val_loss = float('inf')
-        best_val_acc = float(0)
-        eval_info_early_model = None
-        bad_counter = 0
+            model = Model(dataset)
+            model.to(device).reset_parameters()
+            optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+            t_start = time.perf_counter()
+
+            best_val_loss = float('inf')
+            best_val_acc = float(0)
+            eval_info_early_model = None
+            bad_counter = 0
 
 
-        pbar = tqdm(range(0, epochs))
-        for epoch in pbar:
-            train(model, optimizer, data, split)
-            eval_info = evaluate(model, data, split)
-            eval_info['epoch'] = epoch
-            pbar.set_description(
-                'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
-                'test loss: {:.2f}, test acc: {:.4f}'
-                    .format(
-                        epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
-                        eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
+            pbar = tqdm(range(0, epochs))
+            for epoch in pbar:
+                train(model, optimizer, data, split)
+                eval_info = evaluate(model, data, split)
+                eval_info['epoch'] = epoch
+                if epoch % 10 == 0:
+                    pbar.set_description(
+                        'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
+                        'test loss: {:.2f}, test acc: {:.4f}'
+                            .format(
+                                epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
+                                eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
+                            )
                     )
-            )
 
-            if logger is not None:
-                logger(eval_info)
+                if logger is not None:
+                    logger(eval_info)
 
-            if eval_info['val_acc'] > best_val_acc or eval_info['val_loss'] < best_val_loss:
-                if eval_info['val_acc'] >= best_val_acc and eval_info['val_loss'] <= best_val_loss:
-                    eval_info_early_model = eval_info
-                    # torch.save(model.state_dict(), './best_{}_single_dec_split_{}.pkl'.format(dataset.name, split))
-                best_val_acc = np.max((best_val_acc, eval_info['val_acc']))
-                best_val_loss = np.min((best_val_loss, eval_info['val_loss']))
-                bad_counter = 0
-            else:
-                bad_counter += 1
-                if bad_counter == patience:
-                    break
+                if eval_info['val_acc'] > best_val_acc or eval_info['val_loss'] < best_val_loss:
+                    if eval_info['val_acc'] >= best_val_acc and eval_info['val_loss'] <= best_val_loss:
+                        eval_info_early_model = eval_info
+                        # torch.save(model.state_dict(), './best_{}_single_dec_split_{}.pkl'.format(dataset.name, split))
+                    best_val_acc = np.max((best_val_acc, eval_info['val_acc']))
+                    best_val_loss = np.min((best_val_loss, eval_info['val_loss']))
+                    bad_counter = 0
+                else:
+                    bad_counter += 1
+                    if bad_counter == patience:
+                        break
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
 
-        t_end = time.perf_counter()
-        durations.append(t_end - t_start)
+            t_end = time.perf_counter()
+            durations.append(t_end - t_start)
 
-        val_losses.append(eval_info_early_model['val_loss'])
-        train_accs.append(eval_info_early_model['train_acc'])
-        val_accs.append(eval_info_early_model['val_acc'])
-        test_accs.append(eval_info_early_model['test_acc'])
-        test_macro_f1s.append(eval_info_early_model['test_macro_f1'])
-        durations.append(t_end - t_start)
+            val_losses.append(eval_info_early_model['val_loss'])
+            train_accs.append(eval_info_early_model['train_acc'])
+            val_accs.append(eval_info_early_model['val_acc'])
+            test_accs.append(eval_info_early_model['test_acc'])
+            test_macro_f1s.append(eval_info_early_model['test_macro_f1'])
+            durations.append(t_end - t_start)
 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, duration = tensor(val_losses), tensor(train_accs), tensor(val_accs), \
                                                             tensor(test_accs), tensor(test_macro_f1s), tensor(durations)
