@@ -24,7 +24,7 @@ def matching_labels_distribution(dataset):
     # Build graph
     adj = coo_matrix(
         (np.ones(dataset[0].num_edges),
-        (dataset[0].edge_index[0].numpy(), dataset[0].edge_index[1].numpy())),
+        (dataset[0].edge_index[0].cpu().numpy(), dataset[0].edge_index[1].cpu().numpy())),
         shape=(dataset[0].num_nodes, dataset[0].num_nodes))
     G = nx.Graph(adj)
 
@@ -191,7 +191,7 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
 
     adj = torch.tensor(coo_matrix(
         (np.ones(dataset[0].num_edges),
-         (dataset[0].edge_index[0].numpy(), dataset[0].edge_index[1].numpy())),
+         (dataset[0].edge_index[0].cpu().numpy(), dataset[0].edge_index[1].cpu().numpy())),
         shape=(dataset[0].num_nodes, dataset[0].num_nodes)).todense())
 
     # node_map = {}
@@ -242,7 +242,7 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
     dataset.data.edge_index = adj.nonzero(as_tuple=False).T
     # dataset.data.node_map = node_map
     dataset.data, dataset.slices = dataset.collate([dataset.data])
-    del dataset._data_list
+    del dataset.__data_list__
     # assert (nx.is_connected(to_networkx(dataset[0]).to_undirected()))
 
     if cuda:

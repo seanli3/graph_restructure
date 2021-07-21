@@ -8,6 +8,7 @@ from torch import tensor
 from torch.optim import Adam
 from sklearn.metrics import f1_score
 import numpy as np
+from tqdm import tqdm
 # from torch_sparse import spmm
 
 
@@ -32,12 +33,21 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
         eval_info_early_model = None
         bad_counter = 0
 
-        for epoch in range(1, epochs + 1):
+        pbar = tqdm(range(0, epochs))
+        for epoch in pbar:
             train(model, optimizer, data)
             eval_info = evaluate(model, data)
             eval_info['epoch'] = epoch
             if epoch % 10 == 0:
-                print(eval_info)
+                pbar.set_description(
+                    'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
+                    'test loss: {:.2f}, test acc: {:.4f}'
+                        .format(
+                            epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
+                            eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
+                        )
+                )
+
 
             if logger is not None:
                 logger(eval_info)

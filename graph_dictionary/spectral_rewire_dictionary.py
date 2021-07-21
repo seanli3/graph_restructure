@@ -3,20 +3,38 @@ from numpy.random import seed as nseed
 import numpy as np
 from graph_dictionary.model import DictNet
 from tqdm import tqdm
+import argparse
 
-# %%
 
-DATASET = 'Squirrel'
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset', type=str, required=True)
+parser.add_argument('--cuda', action='store_true')
+args = parser.parse_args()
+
+DATASET = args.dataset
+
+print(DATASET)
+
+args.cuda = args.cuda and torch.cuda.is_available()
 
 seed = 42
 np.random.seed(seed)
 torch.manual_seed(seed)
 
+if args.cuda:
+    print("-----------------------Training on CUDA-------------------------")
+    torch.cuda.manual_seed(seed)
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 
 def run(name, Model, runs, epochs, lr, weight_decay, patience):
-    for split in range(10):
+    if name.lower() in ['cora', 'citeseer', 'pubmed']:
+        splits = 1
+    else:
+        splits = 10
+    for split in range(splits):
         print('Split:', split)
-        model = Model(name, split)
+        model = Model(name, split, cuda=args.cuda)
         model.reset_parameters()
 
         best_val_loss = float('inf')
@@ -74,7 +92,7 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
     return eval_info_early_model
 
 
-eval_info_early_model = run(DATASET, DictNet, 1, 1000, 0.005, 0.0005, 10)
+eval_info_early_model = run(DATASET, DictNet, 1, 2000, 0.001, 0.0005, 100)
 print()
 
 
