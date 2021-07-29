@@ -5,6 +5,7 @@ from numpy.random import seed as nseed
 from webkb import get_dataset, run
 from torch import nn
 from torch_geometric.utils import get_laplacian
+from graph_dictionary.model import create_filter
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
@@ -37,10 +38,6 @@ torch.manual_seed(args.seed)
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
-def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
-        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-            torch.eye(laplacian.shape[0])).matrix_power(-2)
 
 if args.cuda:
     print("-----------------------Training on CUDA-------------------------")

@@ -5,6 +5,7 @@ from torch_geometric.nn import GCNConv
 from random import seed as rseed
 from numpy.random import seed as nseed
 from torch_geometric.utils import get_laplacian
+from graph_dictionary.model import create_filter
 
 from citation import get_dataset, random_planetoid_splits, run, random_coauthor_amazon_splits
 
@@ -41,10 +42,6 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
-        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-            torch.eye(laplacian.shape[0])).matrix_power(-2)
 
 class Net(torch.nn.Module):
     def __init__(self, dataset):

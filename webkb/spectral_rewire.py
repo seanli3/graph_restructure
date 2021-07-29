@@ -1,4 +1,5 @@
 import torch
+from graph_dictionary.model import create_filter
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import get_laplacian as gl
@@ -42,11 +43,6 @@ comple_A = 1 - torch.sparse_coo_tensor(data.edge_index, torch.ones(data.edge_ind
 comple_L_index, comple_L_weight = gl(comple_A.nonzero(as_tuple=False).T, normalization='sym')
 comple_L = torch.sparse_coo_tensor(comple_L_index, comple_L_weight).to_dense()
 train_mask = data.train_mask[0]
-
-
-def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm((laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-     torch.eye(laplacian.shape[0])).pinverse().matrix_power(2)
 
 
 if not random:

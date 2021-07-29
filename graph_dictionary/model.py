@@ -67,6 +67,7 @@ def sample_negative(num_classes, mask, y):
         negative_samples.append(nodes)
     return list(filter(lambda s: len(s) > 1, negative_samples))
 
+
 class DictNet(torch.nn.Module):
     def __init__(self, name, split, cuda=False):
         super(DictNet, self).__init__()
