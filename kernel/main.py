@@ -1,21 +1,21 @@
 from itertools import product
 
 import argparse
-from datasets import get_dataset
-from train_eval import cross_validation_with_val_set
+from kernel.datasets import get_dataset
+from kernel.train_eval import cross_validation_with_val_set
 
-from gcn import GCN, GCNWithJK
-from graph_sage import GraphSAGE, GraphSAGEWithJK
-from gin import GIN0, GIN0WithJK, GIN, GINWithJK
-from graclus import Graclus
-from top_k import TopK
-from sag_pool import SAGPool
-from diff_pool import DiffPool
-from edge_pool import EdgePool
-from global_attention import GlobalAttentionNet
-from set2set import Set2SetNet
-from sort_pool import SortPool
-from asap import ASAP
+from kernel.gcn import GCN, GCNWithJK
+from kernel.graph_sage import GraphSAGE, GraphSAGEWithJK
+from kernel.gin import GIN0, GIN0WithJK, GIN, GINWithJK
+from kernel.graclus import Graclus
+from kernel.top_k import TopK
+from kernel.sag_pool import SAGPool
+from kernel.diff_pool import DiffPool
+from kernel.edge_pool import EdgePool
+from kernel.global_attention import GlobalAttentionNet
+from kernel.set2set import Set2SetNet
+from kernel.sort_pool import SortPool
+from kernel.asap import ASAP
 from random import seed as rseed
 from numpy.random import seed as nseed
 import torch
@@ -33,21 +33,21 @@ args = parser.parse_args()
 rseed(args.seed)
 nseed(args.seed)
 torch.manual_seed(args.seed)
-torch.use_deterministic_algorithms(True)
+# torch.use_deterministic_algorithms(True)
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
 if args.cuda:
     print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(args.seed)
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 # layers = [1, 2, 3, 4, 5]
 # hiddens = [16, 32, 64, 128]
 layers = [1, 2]
 hiddens = [32]
-# datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']  # , 'COLLAB']
-datasets = ['PROTEINS']  # , 'COLLAB']
+# datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+datasets = ['PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
 nets = [
     # GCNWithJK,
     # GraphSAGEWithJK,

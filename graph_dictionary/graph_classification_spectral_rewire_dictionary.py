@@ -2,11 +2,14 @@ import torch
 from tqdm import tqdm
 from torch_geometric.utils import get_laplacian
 import math
+from graph_dictionary.graph_classification_model import create_filter
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def train_rewirer(dataset, Model, train_idx, val_idx, epochs, lr, weight_decay, patience):
+        dataset.data.to(device)
         model = Model(dataset, train_idx, val_idx)
-        model.reset_parameters()
+        model.to(device).reset_parameters()
 
         best_val_loss = float('inf')
         eval_info_early_model = {}
@@ -46,19 +49,13 @@ def train_rewirer(dataset, Model, train_idx, val_idx, epochs, lr, weight_decay, 
         return eval_info_early_model
 
 
-def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
-        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-            torch.eye(laplacian.shape[0])).matrix_power(-2)
-
-
 def rewire_graph(model, dataset):
     dictionary = {}
     step = 0.2
     for i in range(len(dataset)):
         L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
-        L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
-        filters = [create_filter(L, b) for b in torch.arange(0, 2.1, step)]
+        L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
+        filters = [create_filter(L, b) for b in torch.arange(0, 2.1, step).to(device)]
         D = torch.stack(filters, dim=2)
         dictionary[i] = D
 
@@ -69,14 +66,14 @@ def rewire_graph(model, dataset):
         D = dictionary[i]
         L = D.matmul(C).squeeze()
 
-        A_hat = torch.eye(L.shape[0]) - L
+        A_hat = torch.eye(L.shape[0]).to(device) - L
         A_hat = torch.nn.functional.normalize(A_hat, dim=1, p=2)
 
         k = math.ceil(dataset[i].num_edges/dataset[i].num_nodes/2)
         # k = 3
-        A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1]) \
-            .index_put((torch.arange(A_hat.shape[0]).repeat_interleave(k), A_hat.abs().topk(k, dim=1, largest=True)[1].view(-1)),
-                       torch.tensor(1.))
+        A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1]).to(device) \
+            .index_put((torch.arange(A_hat.shape[0]).to(device).repeat_interleave(k), A_hat.abs().topk(k, dim=1, largest=True)[1].view(-1)),
+                       torch.tensor(1.).to(device))
         A_one_zero.masked_fill_(A_hat.abs() < 0.01, 0)
 
         edge_index = A_one_zero.nonzero().T

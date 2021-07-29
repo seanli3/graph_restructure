@@ -7,6 +7,9 @@ import numpy as np
 import math
 from torch import nn
 
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def check_symmetric(a):
     return check_equality(a, a.T)
 
@@ -15,7 +18,7 @@ def check_equality(a, b, rtol=1e-05, atol=1e-03):
 
 
 def get_adjacency(edge_index):
-    return torch.sparse_coo_tensor(edge_index, torch.ones(edge_index.shape[1])).to_dense()
+    return torch.sparse_coo_tensor(edge_index, torch.ones(edge_index.shape[1]).to(device)).to_dense()
 
 def adj_to_lap(A, remove_self_loops=False):
     if remove_self_loops:
@@ -23,12 +26,12 @@ def adj_to_lap(A, remove_self_loops=False):
     deg = A.sum(dim=0)
     deg_inv_sqrt = torch.diag(deg.pow_(-0.5))
     deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-    return torch.eye(A.shape[0]) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
+    return torch.eye(A.shape[0]).to(device) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
 
 def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
-        (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
-            torch.eye(laplacian.shape[0])).matrix_power(-2)
+    return (torch.diag(torch.ones(laplacian.shape[0]).to(device) * 40).mm(
+        (laplacian - torch.diag(torch.ones(laplacian.shape[0]).to(device) * b)).matrix_power(4)) + \
+            torch.eye(laplacian.shape[0]).to(device)).matrix_power(-2)
 
 def symmetric(X):
     return X.triu() + X.triu(1).transpose(-1, -2)
@@ -65,8 +68,8 @@ class DictNet(torch.nn.Module):
 
         for i in range(len(dataset)):
             L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
-            L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
-            filters = [create_filter(L, b) for b in torch.arange(0, 2.1, step)]
+            L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
+            filters = [create_filter(L, b) for b in torch.arange(0, 2.1, step).to(device)]
             D = torch.stack(filters, dim=2)
             self.dictionary[i] = D
 
@@ -92,7 +95,7 @@ class DictNet(torch.nn.Module):
         for i in idx.tolist():
             D = self.dictionary[i]
             L_hat = D.matmul(C).squeeze()
-            y_hat = (torch.eye(self.dataset[i].num_nodes) - L_hat).mm(self.dataset[i].x)
+            y_hat = (torch.eye(self.dataset[i].num_nodes).to(device) - L_hat).mm(self.dataset[i].x)
             xs[i] = y_hat.mean(dim=0)
 
         homophily_loss_1 = 0
