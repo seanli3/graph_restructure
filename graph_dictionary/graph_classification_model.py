@@ -8,7 +8,7 @@ import math
 from torch import nn
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
 def check_symmetric(a):
     return check_equality(a, a.T)
@@ -38,7 +38,7 @@ def symmetric(X):
 
 def get_class_idx(num_classes, idx, y):
     class_idx = [(y == i).nonzero().view(-1).tolist() for i in range(num_classes)]
-    class_idx = [set(i).intersection(set(idx.tolist())) for i in class_idx]
+    class_idx = [list(set(i).intersection(set(idx.tolist()))) for i in class_idx]
     return class_idx
 
 def sample_negative(num_classes, idx, y):
@@ -49,73 +49,53 @@ def sample_positive(num_classes, idx, y):
     return get_class_idx(num_classes, idx, y)
 
 class DictNet(torch.nn.Module):
-    def __init__(self, dataset, train_idx, val_idx):
+    def __init__(self, dataset):
         super(DictNet, self).__init__()
         self.dataset = dataset
-        step = 0.2
+        self.num_classes = dataset.num_classes
+        self.step = 0.2
         # sample negative examples
-        self.train_negative_samples = sample_negative(dataset.num_classes, train_idx, dataset.data.y)
-        self.train_positive_samples = sample_positive(dataset.num_classes, train_idx, dataset.data.y)
-
-        self.val_negative_samples = sample_negative(dataset.num_classes, val_idx, dataset.data.y)
-        self.val_positive_samples = sample_positive(dataset.num_classes, val_idx, dataset.data.y)
-
-        self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, step)), 1))
-        self.dictionary = {}
-
-        self.train_idx = train_idx
-        self.val_idx = val_idx
-
-        for i in range(len(dataset)):
-            L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
-            L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
-            filters = [create_filter(L, b) for b in torch.arange(0, 2.1, step).to(device)]
-            D = torch.stack(filters, dim=2)
-            self.dictionary[i] = D
-
+        self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1))
 
     def reset_parameters(self):
         # self.W.weight = torch.nn.Parameter(get_adjacency(self.data.edge_index))
         torch.nn.init.xavier_normal_(self.C, 0.6)
 
-    def compute_loss(self):
-        # C = self.C
-        C = torch.nn.functional.normalize(self.C, dim=0, p=2)
-        xs = {}
-
-        if self.training:
-            negative_samples = self.train_negative_samples
-            positive_samples = self.train_positive_samples
-            idx = self.train_idx
-        else:
-            negative_samples = self.val_negative_samples
-            positive_samples = self.val_positive_samples
-            idx = self.val_idx
-
-        for i in idx.tolist():
-            D = self.dictionary[i]
-            L_hat = D.matmul(C).squeeze()
-            y_hat = (torch.eye(self.dataset[i].num_nodes).to(device) - L_hat).mm(self.dataset[i].x)
-            xs[i] = y_hat.mean(dim=0)
-
+    def compute_loss(self, embeddings, negative_samples, positive_samples):
         homophily_loss_1 = 0
         for group in negative_samples:
-            x = torch.stack([xs[i] for i in group], dim=0)
-            homophily_loss_1 -= torch.cdist(x, x).mean()
+            homophily_loss_1 -= torch.cdist(embeddings[[group]], embeddings[[group]]).mean()
 
         homophily_loss_2 = 0
         for group in positive_samples:
-            x = torch.stack([xs[i] for i in group], dim=0)
-            homophily_loss_2 += torch.cdist(x, x).mean()
+            homophily_loss_2 += torch.cdist(embeddings[[group]], embeddings[[group]]).mean()
             # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
 
         beta = len(negative_samples)/self.dataset.num_classes
 
         recovery_loss = 0
-        dimensions =torch.sqrt(torch.tensor(float(C.shape[0])))
-        sparsity_loss = torch.mean((dimensions - C.norm(p=1, dim=0)/C.norm(p=2, dim=0))/(dimensions - 1))
+        dimensions = torch.sqrt(torch.tensor(float(self.C.shape[0])))
+        sparsity_loss = torch.mean((dimensions - self.C.norm(p=1, dim=0)/self.C.norm(p=2, dim=0))/(dimensions - 1))
 
         return recovery_loss + sparsity_loss + homophily_loss_2 + homophily_loss_1/beta
 
-    def forward(self):
-        return self.compute_loss()
+    def forward(self, data):
+        negative_samples = sample_negative(self.num_classes, torch.arange(data.num_graphs), data.y)
+        positive_samples = sample_positive(self.num_classes, torch.arange(data.num_graphs), data.y)
+
+        C = torch.nn.functional.normalize(self.C, dim=0, p=2)
+
+        embeddings = torch.zeros(data.num_graphs, data.x.shape[1])
+
+        for i in range(data.num_graphs):
+            g = data[i]
+            L_index, L_weight = get_laplacian(g.edge_index, normalization='sym')
+            L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
+            filters = [create_filter(L, b) for b in torch.arange(0, 2.1, self.step).to(device)]
+            D = torch.stack(filters, dim=2)
+            L_hat = D.matmul(C).squeeze()
+            y_hat = (torch.eye(g.num_nodes).to(device) - L_hat).mm(g.x)
+
+            embeddings[i] = y_hat.mean(dim=0)
+
+        return self.compute_loss(embeddings, negative_samples, positive_samples)

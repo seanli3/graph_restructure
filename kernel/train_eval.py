@@ -6,22 +6,18 @@ from torch import tensor
 from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
-from graph_dictionary.graph_classification_model import DictNet
-from graph_dictionary.graph_classification_spectral_rewire_dictionary import train_rewirer, rewire_graph
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cpu'
 
-def cross_validation_with_val_set(dataset, model, folds, epochs, batch_size,
+def cross_validation_with_val_set(dataset, model, epochs, batch_size,
                                   lr, lr_decay_factor, lr_decay_step_size,
                                   weight_decay, logger=None):
 
     val_losses, accs, durations = [], [], []
     for fold, (train_idx, test_idx,
-               val_idx) in enumerate(zip(*k_fold(dataset, folds))):
+               val_idx) in enumerate(zip(*k_fold(dataset ))):
 
-        dataset._data_list = None
-        eval_info_early_model = train_rewirer(dataset, DictNet, train_idx, val_idx, 2000, 0.05, 0.0005, 10)
-        rewire_graph(eval_info_early_model, dataset)
+        # dataset._data_list = None
 
         train_dataset = dataset[train_idx]
         test_dataset = dataset[test_idx]
@@ -84,21 +80,35 @@ def cross_validation_with_val_set(dataset, model, folds, epochs, batch_size,
     return loss_mean, acc_mean, acc_std
 
 
-def k_fold(dataset, folds):
-    skf = StratifiedKFold(folds, shuffle=True, random_state=12345)
+def k_fold(dataset, splits_dir="./splits", folds=10):
+    train_file_name = './splits/{}_train.pt'.format(dataset.name)
+    val_file_name = './splits/{}_val.pt'.format(dataset.name)
+    test_file_name = './splits/{}_test.pt'.format(dataset.name)
 
-    test_indices, train_indices = [], []
-    for _, idx in skf.split(torch.zeros(len(dataset)), dataset.data.y):
-        test_indices.append(torch.from_numpy(idx).to(torch.long))
+    try:
+        print('Loading split files...')
+        train_indices = torch.load(train_file_name)
+        val_indices = torch.load(val_file_name)
+        test_indices = torch.load(test_file_name)
+    except FileNotFoundError:
+        print('Split files not found, creating them...')
+        skf = StratifiedKFold(folds, shuffle=True, random_state=12345)
 
-    val_indices = [test_indices[i - 1] for i in range(folds)]
+        test_indices, train_indices = [], []
+        for _, idx in skf.split(torch.zeros(len(dataset)), dataset.data.y):
+            test_indices.append(torch.from_numpy(idx).to(torch.long))
 
-    for i in range(folds):
-        train_mask = torch.ones(len(dataset), dtype=torch.bool)
-        train_mask[test_indices[i]] = 0
-        train_mask[val_indices[i]] = 0
-        train_indices.append(train_mask.nonzero(as_tuple=False).view(-1))
+        val_indices = [test_indices[i - 1] for i in range(folds)]
 
+        for i in range(folds):
+            train_mask = torch.ones(len(dataset), dtype=torch.bool)
+            train_mask[test_indices[i]] = 0
+            train_mask[val_indices[i]] = 0
+            train_indices.append(train_mask.nonzero(as_tuple=False).view(-1))
+
+        torch.save(train_indices, '{}/{}_train.pt'.format(splits_dir, dataset.name))
+        torch.save(val_indices, '{}/{}_val.pt'.format(splits_dir, dataset.name))
+        torch.save(test_indices, '{}/{}_test.pt'.format(splits_dir, dataset.name))
     return train_indices, test_indices, val_indices
 
 
