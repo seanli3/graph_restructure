@@ -30,40 +30,31 @@ parser.add_argument('--seed', type=int, default=172)
 parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
 
-rseed(args.seed)
-nseed(args.seed)
-torch.manual_seed(args.seed)
 torch.use_deterministic_algorithms(True)
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
-if args.cuda:
-    print("-----------------------Training on CUDA-------------------------")
-    torch.cuda.manual_seed(args.seed)
-    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
-else:
-    torch.set_num_threads(8)
-
-layers = [1, 2, 3, 4, 5]
-hiddens = [16, 32, 64, 128]
-# layers = [1]
-# hiddens = [16]
-datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+# layers = [1, 2, 3, 4, 5]
+# hiddens = [16, 32, 64, 128]
+layers = [5]
+hiddens = [128]
+# datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
 # datasets = ['PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+datasets = ['IMDB-BINARY']# , 'COLLAB']
 nets = [
     # GCNWithJK,
     # GraphSAGEWithJK,
-    # GIN0WithJK,
-    # GINWithJK,
-    # Graclus,
-    # TopK,
-    # SAGPool,
-    # DiffPool,
-    # EdgePool,
-    GCN,
+    GIN0WithJK,
+    # # GINWithJK,
+    # # Graclus,
+    # # TopK,
+    # # SAGPool,
+    # # DiffPool,
+    # # EdgePool,
+    # GCN,
     # GraphSAGE,
-    # GIN0,
-    # GIN,
+    GIN0,
+    GIN,
     # GlobalAttentionNet,
     # Set2SetNet,
     # SortPool,
@@ -131,6 +122,19 @@ for dataset_name, Net in product(datasets, nets):
     best_result = (float('inf'), 0, 0, 0, 0)  # (loss, acc, std)
     print('-----\n{} - {}'.format(dataset_name, Net.__name__))
     for num_layers, hidden in product(layers, hiddens):
+        rseed(args.seed)
+        nseed(args.seed)
+        torch.manual_seed(args.seed)
+
+        args.cuda = args.cuda and torch.cuda.is_available()
+
+        if args.cuda:
+            print("-----------------------Training on CUDA-------------------------")
+            torch.cuda.manual_seed(args.seed)
+            # torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        else:
+            torch.set_num_threads(8)
+
         dataset = get_dataset(dataset_name, sparse=Net != DiffPool)
         model = Net(dataset, num_layers, hidden)
         loss, acc, std = cross_validation_with_val_set(
@@ -147,7 +151,7 @@ for dataset_name, Net in product(datasets, nets):
         if loss < best_result[0]:
             best_result = (loss, acc, std, num_layers, hidden)
 
-    desc = '{:.3f} ± {:.3f}, hidden: {}, layer: {}'.format(best_result[1], best_result[2], hidden, num_layers)
+    desc = '{:.3f} ± {:.3f}, hidden: {}, layer: {}'.format(best_result[1], best_result[2], best_result[4], best_result[3])
     print('Best result - {}'.format(desc))
     results += ['{} - {}: {}'.format(dataset_name, model, desc)]
 print('-----\n{}'.format('\n'.join(results)))

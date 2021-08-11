@@ -11,8 +11,8 @@ from kernel.datasets import get_dataset
 device = torch.device('cpu')
 
 def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
-                  epochs, lr, weight_decay, patience):
-        model = Model(dataset)
+                  epochs, lr, weight_decay, patience, step):
+        model = Model(dataset, step)
         model.to(device).reset_parameters()
 
         train_dataset = dataset[train_idx]
@@ -75,18 +75,18 @@ def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
         return eval_info_early_model
 
 
-def rewire_graphs(dataset):
+def rewire_graphs(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, patience=10, step=0.1, max_degree=5, threshold=0.1):
     train_indices, test_indices, val_indices = k_fold(dataset, splits_dir="../kernel/splits")
     for i in range(len(train_indices)):
         dataset._data_list = None
         best_model = train_rewirer(dataset, DictNet, train_indices[i], val_indices[i],
-                                              test_indices[i], 128, 2000, 0.005, 0.0005, 10)
-        rewired_dataset = rewire_graph(best_model, dataset)
+                                              test_indices[i], batch_size, epochs, lr, weight_decay, patience, step)
+        rewired_dataset = rewire_graph(best_model, dataset, step, max_degree, threshold)
         torch.save(rewired_dataset, '../kernel/splits/{}_dataset_split_{}.pt'.format(dataset.name, i))
 
-def rewire_graph(model, dataset):
+
+def rewire_graph(model, dataset, step=0.1, max_degree=5, threshold=0.1):
     dictionary = {}
-    step = 0.2
     for i in range(len(dataset)):
         L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
         L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
@@ -104,11 +104,11 @@ def rewire_graph(model, dataset):
         A_hat = torch.eye(L.shape[0]).to(device) - L
         A_hat = torch.nn.functional.normalize(A_hat, dim=1, p=2)
 
-        # k = math.floor(dataset[i].num_edges/dataset[i].num_nodes)
-        # A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1]).to(device) \
-        #     .index_put((torch.arange(A_hat.shape[0]).to(device).repeat_interleave(k), A_hat.abs().topk(k, dim=1, largest=True)[1].view(-1)),
-        #                torch.tensor(1.).to(device))
-        A_one_zero = A_hat.masked_fill(A_hat.abs() < 0.1, 0)
+        k = min(math.floor(dataset[i].num_edges/dataset[i].num_nodes), max_degree)
+        A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1]).to(device) \
+            .index_put((torch.arange(A_hat.shape[0]).to(device).repeat_interleave(k), A_hat.abs().topk(k, dim=1, largest=True)[1].view(-1)),
+                       torch.tensor(1.).to(device))
+        A_one_zero = A_one_zero.masked_fill(A_hat.abs() < threshold, 0)
 
         edge_index = A_one_zero.nonzero().T
         dataset._data_list[i].edge_index = edge_index
@@ -116,8 +116,8 @@ def rewire_graph(model, dataset):
 
 
 # datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-datasets = ['REDDIT-BINARY']# , 'COLLAB']
+datasets = ['IMDB-BINARY']# , 'COLLAB']
 
 for dataset_name in datasets:
     dataset = get_dataset(dataset_name)
-    rewire_graphs(dataset)
+    rewire_graphs(dataset, step=0.1, lr=0.002, max_degree=50, threshold=0.05)

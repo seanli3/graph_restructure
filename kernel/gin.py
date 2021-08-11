@@ -37,10 +37,10 @@ class GIN0(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = self.conv1(x, edge_index)
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = self.conv1(x, adj_t)
         for conv in self.convs:
-            x = conv(x, edge_index)
+            x = conv(x, adj_t)
         x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
@@ -89,11 +89,11 @@ class GIN0WithJK(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = self.conv1(x, edge_index)
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = self.conv1(x, adj_t)
         xs = [x]
         for conv in self.convs:
-            x = conv(x, edge_index)
+            x = conv(x, adj_t)
             xs += [x]
         x = self.jump(xs)
         x = global_mean_pool(x, batch)
@@ -139,10 +139,10 @@ class GIN(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = self.conv1(x, edge_index)
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = self.conv1(x, adj_t)
         for conv in self.convs:
-            x = conv(x, edge_index)
+            x = conv(x, adj_t)
         x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
@@ -191,11 +191,11 @@ class GINWithJK(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = self.conv1(x, edge_index)
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = self.conv1(x, adj_t)
         xs = [x]
         for conv in self.convs:
-            x = conv(x, edge_index)
+            x = conv(x, adj_t)
             xs += [x]
         x = self.jump(xs)
         x = global_mean_pool(x, batch)

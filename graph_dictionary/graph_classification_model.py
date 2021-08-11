@@ -49,11 +49,11 @@ def sample_positive(num_classes, idx, y):
     return get_class_idx(num_classes, idx, y)
 
 class DictNet(torch.nn.Module):
-    def __init__(self, dataset):
+    def __init__(self, dataset, step=0.1):
         super(DictNet, self).__init__()
         self.dataset = dataset
         self.num_classes = dataset.num_classes
-        self.step = 0.2
+        self.step = step
         # sample negative examples
         self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1))
 
