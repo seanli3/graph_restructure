@@ -1,7 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import SAGEConv, global_mean_pool, JumpingKnowledge
+from torch_geometric.nn import SAGEConv, JumpingKnowledge
+from kernel.utils import global_mean_pool_deterministic
 
 
 class GraphSAGE(torch.nn.Module):
@@ -22,11 +23,11 @@ class GraphSAGE(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = F.relu(self.conv1(x, edge_index))
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = F.relu(self.conv1(x, adj_t))
         for conv in self.convs:
-            x = F.relu(conv(x, edge_index))
-        x = global_mean_pool(x, batch)
+            x = F.relu(conv(x, adj_t))
+        x = global_mean_pool_deterministic(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -59,14 +60,14 @@ class GraphSAGEWithJK(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = F.relu(self.conv1(x, edge_index))
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = F.relu(self.conv1(x, adj_t))
         xs = [x]
         for conv in self.convs:
-            x = F.relu(conv(x, edge_index))
+            x = F.relu(conv(x, adj_t))
             xs += [x]
         x = self.jump(xs)
-        x = global_mean_pool(x, batch)
+        x = global_mean_pool_deterministic(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)

@@ -8,7 +8,7 @@ import math
 from torch import nn
 
 
-device = torch.device('cpu')
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 def check_symmetric(a):
     return check_equality(a, a.T)
@@ -26,12 +26,14 @@ def adj_to_lap(A, remove_self_loops=False):
     deg = A.sum(dim=0)
     deg_inv_sqrt = torch.diag(deg.pow_(-0.5))
     deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-    return torch.eye(A.shape[0]).to(device) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
+    return torch.eye(A.shape[0], device=device) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
 
-def create_filter(laplacian, b):
-    return (torch.diag(torch.ones(laplacian.shape[0]).to(device) * 40).mm(
-        (laplacian - torch.diag(torch.ones(laplacian.shape[0]).to(device) * b)).matrix_power(4)) + \
-            torch.eye(laplacian.shape[0]).to(device)).matrix_power(-2)
+def create_filter(laplacian, step):
+    part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * 40)
+    part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(0, 2.1, step, device=device).view(
+        -1, 1, 1)).matrix_power(4)
+    part3 = torch.eye(laplacian.shape[0], device=device)
+    return (part1.matmul(part2) + part3).matrix_power(-2)
 
 def symmetric(X):
     return X.triu() + X.triu(1).transpose(-1, -2)
@@ -91,8 +93,7 @@ class DictNet(torch.nn.Module):
             g = data[i]
             L_index, L_weight = get_laplacian(g.edge_index, normalization='sym')
             L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
-            filters = [create_filter(L, b) for b in torch.arange(0, 2.1, self.step).to(device)]
-            D = torch.stack(filters, dim=2)
+            D = create_filter(L, self.step).permute(1, 2, 0)
             L_hat = D.matmul(C).squeeze()
             y_hat = (torch.eye(g.num_nodes).to(device) - L_hat).mm(g.x)
 

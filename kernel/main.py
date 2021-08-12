@@ -31,34 +31,34 @@ parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
 
 torch.use_deterministic_algorithms(True)
+torch.backends.cudnn.deterministic = True
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
-# layers = [1, 2, 3, 4, 5]
-# hiddens = [16, 32, 64, 128]
-layers = [5]
-hiddens = [128]
+layers = [1, 2, 3, 4, 5]
+hiddens = [16, 32, 64, 128]
+# layers = [5]
+# hiddens = [128]
 # datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-# datasets = ['PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-datasets = ['IMDB-BINARY']# , 'COLLAB']
+datasets = ['PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
 nets = [
-    # GCNWithJK,
-    # GraphSAGEWithJK,
+    GCNWithJK,
+    GraphSAGEWithJK,
     GIN0WithJK,
-    # # GINWithJK,
-    # # Graclus,
-    # # TopK,
-    # # SAGPool,
-    # # DiffPool,
-    # # EdgePool,
-    # GCN,
-    # GraphSAGE,
+    GINWithJK,
+    Graclus,
+    TopK,
+    SAGPool,
+    DiffPool,
+    EdgePool,
+    GCN,
+    GraphSAGE,
     GIN0,
     GIN,
-    # GlobalAttentionNet,
-    # Set2SetNet,
-    # SortPool,
-    # ASAP,
+    GlobalAttentionNet,
+    Set2SetNet,
+    SortPool,
+    ASAP,
 ]
 
 # -----

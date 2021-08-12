@@ -1,7 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear, Conv1d
-from torch_geometric.nn import SAGEConv, global_sort_pool
+from torch_geometric.nn import SAGEConv
+from kernel.layers.sort_pool import global_sort_pool
 
 
 class SortPool(torch.nn.Module):
@@ -25,10 +26,10 @@ class SortPool(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = F.relu(self.conv1(x, edge_index))
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = F.relu(self.conv1(x, adj_t))
         for conv in self.convs:
-            x = F.relu(conv(x, edge_index))
+            x = F.relu(conv(x, adj_t))
         x = global_sort_pool(x, batch, self.k)
         x = x.view(len(x), self.k, -1).permute(0, 2, 1)
         x = F.relu(self.conv1d(x))

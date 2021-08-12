@@ -1,7 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear, Sequential, ReLU, BatchNorm1d as BN
-from torch_geometric.nn import GINConv, global_mean_pool, JumpingKnowledge
+from torch_geometric.nn import GINConv, JumpingKnowledge
+from kernel.utils import global_mean_pool_deterministic
 
 
 class GIN0(torch.nn.Module):
@@ -41,7 +42,7 @@ class GIN0(torch.nn.Module):
         x = self.conv1(x, adj_t)
         for conv in self.convs:
             x = conv(x, adj_t)
-        x = global_mean_pool(x, batch)
+        x = global_mean_pool_deterministic(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -96,7 +97,7 @@ class GIN0WithJK(torch.nn.Module):
             x = conv(x, adj_t)
             xs += [x]
         x = self.jump(xs)
-        x = global_mean_pool(x, batch)
+        x = global_mean_pool_deterministic(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -143,7 +144,7 @@ class GIN(torch.nn.Module):
         x = self.conv1(x, adj_t)
         for conv in self.convs:
             x = conv(x, adj_t)
-        x = global_mean_pool(x, batch)
+        x = global_mean_pool_deterministic(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -198,7 +199,7 @@ class GINWithJK(torch.nn.Module):
             x = conv(x, adj_t)
             xs += [x]
         x = self.jump(xs)
-        x = global_mean_pool(x, batch)
+        x = global_mean_pool_deterministic(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)

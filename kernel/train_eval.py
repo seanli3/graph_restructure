@@ -8,7 +8,7 @@ from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from torch_sparse import SparseTensor
 
-device = 'cuda'
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 def cross_validation_with_val_set(dataset, model, epochs, batch_size,
                                   lr, lr_decay_factor, lr_decay_step_size,
@@ -23,9 +23,10 @@ def cross_validation_with_val_set(dataset, model, epochs, batch_size,
         # dataset = torch.load('./splits/{}_dataset_split_{}.pt'.format(dataset.name, fold))
 
         for i, data in enumerate(dataset):
-            adj = SparseTensor(row=data.edge_index[0], col=data.edge_index[1],
-                               sparse_sizes=(data.num_nodes, data.num_nodes))
-            dataset._data_list[i].__setattr__('adj_t', adj.t())
+            if data.edge_index is not None:
+                adj = SparseTensor(row=data.edge_index[0], col=data.edge_index[1],
+                                   sparse_sizes=(data.num_nodes, data.num_nodes))
+                dataset._data_list[i].__setattr__('adj_t', adj.t())
 
         train_dataset = dataset[train_idx]
         test_dataset = dataset[test_idx]

@@ -31,6 +31,14 @@ def create_filter(laplacian, b):
         (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
             torch.eye(laplacian.shape[0])).matrix_power(-2)
 
+def create_filter(laplacian, step):
+    part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * 40)
+    part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(0, 2.1, step, device=device).view(
+        -1, 1, 1)).matrix_power(4)
+    part3 = torch.eye(laplacian.shape[0], device=device)
+    return (part1.matmul(part2) + part3).matrix_power(-2)
+
+
 # def create_filter(laplacian, b):
 #     return torch.diag(torch.ones(laplacian.shape[0]) * b) - laplacian
 
@@ -91,13 +99,12 @@ class DictNet(torch.nn.Module):
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         self.L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
         # self.W = torch.nn.Embedding(data.num_nodes, data.num_nodes)
-        self.filters = [create_filter(self.L, b) for b in torch.arange(0, 2.1, 0.2)]
-        self.C = torch.nn.Parameter(torch.empty(len(self.filters), 1))
+        self.D = create_filter(self.L, self.step).permute(1, 2, 0)
+        self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1))
 
         self.A = None
         # self.norm_y = torch.nn.functional.normalize(data.x, p=2, dim=0)
         self.loss = torch.nn.MSELoss()
-        self.D = torch.stack(self.filters, dim=2)
         self.I = torch.eye(dataset[0].num_nodes)
 
         # sample negative examples

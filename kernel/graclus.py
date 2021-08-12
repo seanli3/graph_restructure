@@ -2,8 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch.nn import Linear
 from torch_geometric.data import Batch
-from torch_geometric.nn import (GraphConv, graclus, max_pool, global_mean_pool,
-                                JumpingKnowledge)
+from torch_geometric.nn import (GraphConv, graclus, max_pool, JumpingKnowledge)
+from kernel.utils import global_mean_pool_deterministic
 
 
 class Graclus(torch.nn.Module):
@@ -26,17 +26,17 @@ class Graclus(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = F.relu(self.conv1(x, edge_index))
-        xs = [global_mean_pool(x, batch)]
+        x, adj_t, batch = data.x, data.adj_t, data.batch
+        x = F.relu(self.conv1(x, adj_t))
+        xs = [global_mean_pool_deterministic(x, batch)]
         for i, conv in enumerate(self.convs):
-            x = F.relu(conv(x, edge_index))
-            xs += [global_mean_pool(x, batch)]
+            x = F.relu(conv(x, adj_t))
+            xs += [global_mean_pool_deterministic(x, batch)]
             if i % 2 == 0 and i < len(self.convs) - 1:
-                cluster = graclus(edge_index, num_nodes=x.size(0))
-                data = Batch(x=x, edge_index=edge_index, batch=batch)
+                cluster = graclus(adj_t, num_nodes=x.size(0))
+                data = Batch(x=x, edge_index=adj_t, batch=batch)
                 data = max_pool(cluster, data)
-                x, edge_index, batch = data.x, data.edge_index, data.batch
+                x, adj_t, batch = data.x, data.adj_t, data.batch
         x = self.jump(xs)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)

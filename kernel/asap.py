@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import (ASAPooling, GraphConv, global_mean_pool,
-                                JumpingKnowledge)
+from kernel.utils import global_mean_pool_deterministic
+from torch_geometric.nn import (ASAPooling, GraphConv, JumpingKnowledge)
 
 
 class ASAP(torch.nn.Module):
@@ -33,14 +33,14 @@ class ASAP(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
+        x, adj_t, edge_index, batch = data.x, data.adj_t, data.edge_index, data.batch
         edge_weight = None
-        x = F.relu(self.conv1(x, edge_index))
-        xs = [global_mean_pool(x, batch)]
+        x = F.relu(self.conv1(x, adj_t))
+        xs = [global_mean_pool_deterministic(x, batch)]
         for i, conv in enumerate(self.convs):
-            x = conv(x=x, edge_index=edge_index, edge_weight=edge_weight)
+            x = conv(x=x, edge_index=adj_t, edge_weight=edge_weight)
             x = F.relu(x)
-            xs += [global_mean_pool(x, batch)]
+            xs += [global_mean_pool_deterministic(x, batch)]
             if i % 2 == 0 and i < len(self.convs) - 1:
                 pool = self.pools[i // 2]
                 x, edge_index, edge_weight, batch, _ = pool(

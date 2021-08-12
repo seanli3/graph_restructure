@@ -8,7 +8,8 @@ from kernel.train_eval import k_fold
 from graph_dictionary.graph_classification_model import DictNet
 from kernel.datasets import get_dataset
 
-device = torch.device('cpu')
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
 
 def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
                   epochs, lr, weight_decay, patience, step):
@@ -90,8 +91,7 @@ def rewire_graph(model, dataset, step=0.1, max_degree=5, threshold=0.1):
     for i in range(len(dataset)):
         L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
         L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
-        filters = [create_filter(L, b) for b in torch.arange(0, 2.1, step).to(device)]
-        D = torch.stack(filters, dim=2)
+        D = create_filter(L, step).permute(1, 2, 0)
         dictionary[i] = D
 
     C = model['C']
