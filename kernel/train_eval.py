@@ -7,20 +7,22 @@ from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from torch_sparse import SparseTensor
+from graph_dictionary.graph_classification_model import rewire_graph
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-def cross_validation_with_val_set(dataset, model, epochs, batch_size,
-                                  lr, lr_decay_factor, lr_decay_step_size,
-                                  weight_decay, logger=None):
+def cross_validation_with_val_set(dataset, model, epochs, batch_size, lr,
+                                  lr_decay_factor,lr_decay_step_size, weight_decay,
+                                  logger=None, rewired=False, max_degree=5, threshold=0.01):
 
     val_losses, accs, durations = [], [], []
     folds = 10
     for fold, (train_idx, test_idx,
                val_idx) in enumerate(zip(*k_fold(dataset, folds=folds))):
 
-        # dataset._data_list = None
-        # dataset = torch.load('./splits/{}_dataset_split_{}.pt'.format(dataset.name, fold))
+        if rewired:
+            rewirer_model = torch.load('../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
+            dataset = rewire_graph(rewirer_model, dataset, max_degree=max_degree, threshold=threshold)
 
         for i, data in enumerate(dataset):
             if data.edge_index is not None:

@@ -1,17 +1,16 @@
 import torch
 from itertools import product
 import torch.nn.functional as F
-from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian
 import numpy as np
 import math
-from torch import nn
-
+from .get_laplacian import get_laplacian
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+
 def check_symmetric(a):
     return check_equality(a, a.T)
+
 
 def check_equality(a, b, rtol=1e-05, atol=1e-03):
     return np.allclose(a, b, rtol=rtol, atol=atol)
@@ -100,3 +99,35 @@ class DictNet(torch.nn.Module):
             embeddings[i] = y_hat.mean(dim=0)
 
         return self.compute_loss(embeddings, negative_samples, positive_samples)
+
+
+def rewire_graph(model, dataset, max_degree=5, threshold=0.1):
+    C = model['C']
+    step = 2.1/C.shape[0]
+
+    dictionary = {}
+    for i in range(len(dataset)):
+        L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
+        L = torch.zeros(dataset[i].num_nodes, dataset[i].num_nodes, device=L_index.device)
+        L = L.index_put((L_index[0], L_index[1]), L_weight).to(device)
+        D = create_filter(L, step).permute(1, 2, 0)
+        dictionary[i] = D
+
+    C = torch.nn.functional.normalize(C, dim=0, p=2)
+
+    for i in range(len(dataset)):
+        D = dictionary[i]
+        L = D.matmul(C).squeeze()
+
+        A_hat = torch.eye(L.shape[0]).to(device) - L
+        A_hat = torch.nn.functional.normalize(A_hat, dim=1, p=2)
+
+        k = min(math.floor(dataset[i].num_edges/dataset[i].num_nodes), max_degree)
+        A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1]).to(device) \
+            .index_put((torch.arange(A_hat.shape[0]).to(device).repeat_interleave(k), A_hat.abs().topk(k, dim=1, largest=True)[1].view(-1)),
+                       torch.tensor(1.).to(device))
+        A_one_zero = A_one_zero.masked_fill(A_hat.abs() < threshold, 0)
+
+        edge_index = A_one_zero.nonzero().T
+        dataset._data_list[i].edge_index = edge_index
+    return dataset

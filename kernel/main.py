@@ -24,6 +24,7 @@ parser.add_argument('--lr_decay_factor', type=float, default=0.5)
 parser.add_argument('--lr_decay_step_size', type=int, default=50)
 parser.add_argument('--seed', type=int, default=172)
 parser.add_argument('--cuda', action='store_true')
+parser.add_argument('--rewired', action='store_true')
 args = parser.parse_args()
 
 torch.use_deterministic_algorithms(True)
@@ -35,8 +36,8 @@ layers = [1, 2, 3, 4, 5]
 hiddens = [16, 32, 64, 128]
 # layers = [3]
 # hiddens = [16]
-# datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-datasets = ['IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+# datasets = ['IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
 nets = [
     GCNWithJK,
     GraphSAGEWithJK,
@@ -51,55 +52,6 @@ nets = [
     Set2SetNet,
     SortPool,
 ]
-
-# -----
-# MUTAG - GCNWithJK
-# Best result - 0.734 ± 0.102, hidden: 128, layer: 5
-# -----
-# MUTAG - GraphSAGEWithJK
-# Best result - 0.761 ± 0.055, hidden: 128, layer: 5
-# -----
-# MUTAG - GIN0WithJK
-# Best result - 0.824 ± 0.068, hidden: 128, layer: 5
-# -----
-# MUTAG - GINWithJK
-# Best result - 0.830 ± 0.081, hidden: 128, layer: 5
-# -----
-# MUTAG - GCN
-# Best result - 0.723 ± 0.083, hidden: 128, layer: 5
-# -----
-# MUTAG - GraphSAGE
-# Best result - 0.740 ± 0.075, hidden: 128, layer: 5
-# -----
-# MUTAG - GIN0
-# Best result - 0.852 ± 0.095, hidden: 128, layer: 5
-# -----
-# MUTAG - GIN
-# Best result - 0.856 ± 0.061, hidden: 128, layer: 5
-# -----
-# PROTEINS - GCNWithJK
-# Best result - 0.718 ± 0.045, hidden: 128, layer: 5
-# -----
-# PROTEINS - GraphSAGEWithJK
-# Best result - 0.718 ± 0.042, hidden: 128, layer: 5
-# -----
-# PROTEINS - GIN0WithJK
-# Best result - 0.723 ± 0.030, hidden: 128, layer: 5
-# -----
-# PROTEINS - GINWithJK
-# Best result - 0.715 ± 0.053, hidden: 128, layer: 5
-# -----
-# PROTEINS - GCN
-# Best result - 0.722 ± 0.043, hidden: 128, layer: 5
-# -----
-# PROTEINS - GraphSAGE
-# Best result - 0.720 ± 0.032, hidden: 128, layer: 5
-# -----
-# PROTEINS - GIN0
-# Best result - 0.732 ± 0.042, hidden: 128, layer: 5
-# -----
-# PROTEINS - GIN
-# Best result - 0.739 ± 0.044, hidden: 128, layer: 5
 
 
 def logger(info):
@@ -138,6 +90,7 @@ for dataset_name, Net in product(datasets, nets):
             lr_decay_step_size=args.lr_decay_step_size,
             weight_decay=0,
             logger=None,
+            rewired=args.rewired
         )
         if loss < best_result[0]:
             best_result = (loss, acc, std, num_layers, hidden)
