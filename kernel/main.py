@@ -7,15 +7,11 @@ from kernel.train_eval import cross_validation_with_val_set
 from kernel.gcn import GCN, GCNWithJK
 from kernel.graph_sage import GraphSAGE, GraphSAGEWithJK
 from kernel.gin import GIN0, GIN0WithJK, GIN, GINWithJK
-from kernel.graclus import Graclus
 from kernel.top_k import TopK
-from kernel.sag_pool import SAGPool
 from kernel.diff_pool import DiffPool
-from kernel.edge_pool import EdgePool
 from kernel.global_attention import GlobalAttentionNet
 from kernel.set2set import Set2SetNet
 from kernel.sort_pool import SortPool
-from kernel.asap import ASAP
 from random import seed as rseed
 from numpy.random import seed as nseed
 import torch
@@ -37,20 +33,16 @@ args.cuda = args.cuda and torch.cuda.is_available()
 
 layers = [1, 2, 3, 4, 5]
 hiddens = [16, 32, 64, 128]
-# layers = [5]
-# hiddens = [128]
+# layers = [3]
+# hiddens = [16]
 # datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-datasets = ['PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+datasets = ['IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
 nets = [
     GCNWithJK,
     GraphSAGEWithJK,
     GIN0WithJK,
     GINWithJK,
-    Graclus,
     TopK,
-    SAGPool,
-    DiffPool,
-    EdgePool,
     GCN,
     GraphSAGE,
     GIN0,
@@ -58,7 +50,6 @@ nets = [
     GlobalAttentionNet,
     Set2SetNet,
     SortPool,
-    ASAP,
 ]
 
 # -----

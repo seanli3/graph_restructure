@@ -1,7 +1,9 @@
 import torch
 import torch.nn.functional as F
+from torch_sparse import SparseTensor
 from torch.nn import Linear
-from torch_geometric.nn import (GraphConv, TopKPooling, JumpingKnowledge)
+from torch_geometric.nn import (GraphConv, JumpingKnowledge)
+from kernel.layers.topk_pool import TopKPooling
 from kernel.utils import global_mean_pool_deterministic
 
 
@@ -41,6 +43,11 @@ class TopK(torch.nn.Module):
                 pool = self.pools[i // 2]
                 x, edge_index, _, batch, _, _ = pool(x, edge_index,
                                                      batch=batch)
+                adj = SparseTensor(row=edge_index[0], col=edge_index[1],
+                                   sparse_sizes=(x.shape[0], x.shape[0]))
+                adj_t = adj.t()
+                data.__setattr__('adj_t', adj_t)
+
         x = self.jump(xs)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)

@@ -1,7 +1,8 @@
 from torch_scatter import segment_csr
 import torch
 
-def bincount(a):
+
+def bincount(a:torch.Tensor):
     device = a.device
     num_bins = a.max() + 1
     return (torch.arange(num_bins, device=device).repeat(a.shape[0]).view(a.shape[0], -1) == a.view(-1, 1)).sum(dim=0)
