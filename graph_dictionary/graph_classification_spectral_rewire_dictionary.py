@@ -5,9 +5,11 @@ from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from kernel.train_eval import k_fold
 from graph_dictionary.graph_classification_model import DictNet
 from kernel.datasets import get_dataset
+from pathlib import Path
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+path = Path(__file__).parent
 
 def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
                   epochs, lr, weight_decay, patience, step):
@@ -80,11 +82,11 @@ def train(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, pa
         dataset._data_list = None
         rewirer_model = train_rewirer(dataset, DictNet, train_indices[i], val_indices[i],
                                               test_indices[i], batch_size, epochs, lr, weight_decay, patience, step)
-        torch.save(rewirer_model, '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, i))
+        torch.save(rewirer_model, path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, i))
 
 
 datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
 
 for dataset_name in datasets:
     dataset = get_dataset(dataset_name)
-    train(dataset, step=0.1, lr=0.002, batch_size=64)
+    train(dataset, step=0.1, lr=0.002, batch_size=256)

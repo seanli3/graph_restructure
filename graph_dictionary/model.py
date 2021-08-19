@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian
+from .get_laplacian import get_laplacian
 import numpy as np
 import math
 from torch import nn
@@ -17,15 +17,6 @@ def get_adjacency(edge_index):
     return torch.sparse_coo_tensor(edge_index, torch.ones(edge_index.shape[1])).to_dense()
 
 
-def adj_to_lap(A, remove_self_loops=False):
-    if remove_self_loops:
-        A.fill_diagonal_(0)
-    deg = A.sum(dim=0)
-    deg_inv_sqrt = torch.diag(deg.pow_(-0.5))
-    deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-    return torch.eye(A.shape[0]) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
-
-
 def create_filter(laplacian, b):
     return (torch.diag(torch.ones(laplacian.shape[0]) * 40).mm(
         (laplacian - torch.diag(torch.ones(laplacian.shape[0]) * b)).matrix_power(4)) + \
@@ -39,20 +30,9 @@ def create_filter(laplacian, step):
     return (part1.matmul(part2) + part3).matrix_power(-2)
 
 
-# def create_filter(laplacian, b):
-#     return torch.diag(torch.ones(laplacian.shape[0]) * b) - laplacian
-
-
-# # Text for the above functions
-# dataset = get_dataset(DATASET, normalize_features=True)
-# data= dataset[0]
-# edge_index = data.edge_index
-# L_index, L_weight = get_laplacian(edge_index, normalization='sym')
-# L = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
-# assert check_equality(adj_to_lap(get_adjacency(edge_index)), L)
-
 def symmetric(X):
     return X.triu() + X.triu(1).transpose(-1, -2)
+
 
 def sample_negative(num_classes, mask, y):
     negative_samples = []
@@ -157,11 +137,6 @@ class DictNet(torch.nn.Module):
         return recovery_loss + sparsity_loss + edge_weight_loss + laplacian_loss + homophily_loss_2 + homophily_loss_1/beta
 
     def forward(self, mask):
-        # self.A = symmetric(self.W.weight)
-        # self.A.clip_(0).nan_to_num(0)
-        # L = adj_to_lap(self.A)
-        # if L.isnan().any():
-        #     raise Exception('nan in L')
         x = self.data.x
 
         return self.compute_loss(self.D, x, mask)

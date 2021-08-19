@@ -4,6 +4,9 @@ import numpy as np
 from graph_dictionary.model import DictNet
 from tqdm import tqdm
 import argparse
+from pathlib import Path
+
+path = Path(__file__).parent
 
 
 parser = argparse.ArgumentParser()
@@ -80,7 +83,7 @@ def run(name, Model, runs, epochs, lr, weight_decay, patience):
                 # eval_info_early_model['A'] = torch.clone(model.A.detach())
                 best_val_loss = val_loss
                 bad_counter = 0
-                torch.save(eval_info_early_model, './{}_best_model_split_{}.pt'.format(DATASET, split))
+                torch.save(eval_info_early_model, path / './{}_best_model_split_{}.pt'.format(DATASET, split))
             else:
                 bad_counter += 1
                 if bad_counter == patience:

@@ -1,7 +1,7 @@
 from typing import Optional
 
 import torch
-from torch_geometric.utils import add_self_loops, remove_self_loops
+from torch_geometric.utils import add_self_loops
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from kernel.utils import scatter_add_deterministic
 
@@ -38,13 +38,14 @@ def get_laplacian(edge_index, edge_weight: Optional[torch.Tensor] = None,
     if normalization is not None:
         assert normalization in ['sym', 'rw']  # 'Invalid normalization'
 
-    edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
-
     if edge_weight is None:
         edge_weight = torch.ones(edge_index.size(1), dtype=dtype,
                                  device=edge_index.device)
 
-    num_nodes = maybe_num_nodes(edge_index, num_nodes)
+    try:
+        num_nodes = maybe_num_nodes(edge_index, num_nodes)
+    except Exception as e:
+        raise e
 
     row, col = edge_index[0], edge_index[1]
     deg = scatter_add_deterministic(edge_weight, row)

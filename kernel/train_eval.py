@@ -8,6 +8,9 @@ from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from torch_sparse import SparseTensor
 from graph_dictionary.graph_classification_model import rewire_graph
+from pathlib import Path
+
+path = Path(__file__).parent
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -21,7 +24,7 @@ def cross_validation_with_val_set(dataset, model, epochs, batch_size, lr,
                val_idx) in enumerate(zip(*k_fold(dataset, folds=folds))):
 
         if rewired:
-            rewirer_model = torch.load('../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
+            rewirer_model = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
             dataset = rewire_graph(rewirer_model, dataset, max_degree=max_degree, threshold=threshold)
 
         for i, data in enumerate(dataset):
@@ -92,9 +95,9 @@ def cross_validation_with_val_set(dataset, model, epochs, batch_size, lr,
 
 
 def k_fold(dataset, splits_dir="./splits", folds=10):
-    train_file_name = './splits/{}_train.pt'.format(dataset.name)
-    val_file_name = './splits/{}_val.pt'.format(dataset.name)
-    test_file_name = './splits/{}_test.pt'.format(dataset.name)
+    train_file_name = path / './splits/{}_train.pt'.format(dataset.name)
+    val_file_name = path / './splits/{}_val.pt'.format(dataset.name)
+    test_file_name = path / './splits/{}_test.pt'.format(dataset.name)
 
     try:
         print('Loading split files...')
@@ -117,9 +120,9 @@ def k_fold(dataset, splits_dir="./splits", folds=10):
             train_mask[val_indices[i]] = 0
             train_indices.append(train_mask.nonzero(as_tuple=False).view(-1))
 
-        torch.save(train_indices, '{}/{}_train.pt'.format(splits_dir, dataset.name))
-        torch.save(val_indices, '{}/{}_val.pt'.format(splits_dir, dataset.name))
-        torch.save(test_indices, '{}/{}_test.pt'.format(splits_dir, dataset.name))
+        torch.save(train_indices, path / '{}/{}_train.pt'.format(splits_dir, dataset.name))
+        torch.save(val_indices, path / '{}/{}_val.pt'.format(splits_dir, dataset.name))
+        torch.save(test_indices, path / '{}/{}_test.pt'.format(splits_dir, dataset.name))
     return train_indices, test_indices, val_indices
 
 

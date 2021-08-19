@@ -19,14 +19,6 @@ def check_equality(a, b, rtol=1e-05, atol=1e-03):
 def get_adjacency(edge_index):
     return torch.sparse_coo_tensor(edge_index, torch.ones(edge_index.shape[1]).to(device)).to_dense()
 
-def adj_to_lap(A, remove_self_loops=False):
-    if remove_self_loops:
-        A.fill_diagonal_(0)
-    deg = A.sum(dim=0)
-    deg_inv_sqrt = torch.diag(deg.pow_(-0.5))
-    deg_inv_sqrt.masked_fill_(deg_inv_sqrt == float('inf'), 0)
-    return torch.eye(A.shape[0], device=device) - deg_inv_sqrt.mm(A).mm(deg_inv_sqrt)
-
 def create_filter(laplacian, step):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * 40)
     part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(0, 2.1, step, device=device).view(
