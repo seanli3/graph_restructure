@@ -25,6 +25,13 @@ parser.add_argument('--lr_decay_step_size', type=int, default=50)
 parser.add_argument('--seed', type=int, default=172)
 parser.add_argument('--cuda', action='store_true')
 parser.add_argument('--rewired', action='store_true')
+parser.add_argument('--dataset', type=str)
+parser.add_argument('--net', type=str)
+parser.add_argument('--layers', type=int)
+parser.add_argument('--hiddens', type=int)
+parser.add_argument('--max_degree', type=int, default=5)
+parser.add_argument('--threshold', type=float, default=0.01)
+
 args = parser.parse_args()
 
 torch.use_deterministic_algorithms(True)
@@ -32,26 +39,38 @@ torch.backends.cudnn.deterministic = True
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
-layers = [1, 2, 3, 4, 5]
-hiddens = [16, 32, 64, 128]
-# layers = [3]
-# hiddens = [16]
-datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-# datasets = ['IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
-nets = [
-    GCNWithJK,
-    GraphSAGEWithJK,
-    GIN0WithJK,
-    GINWithJK,
-    TopK,
-    GCN,
-    GraphSAGE,
-    GIN0,
-    GIN,
-    GlobalAttentionNet,
-    Set2SetNet,
-    SortPool,
-]
+if args.layers:
+    layers = [args.layers]
+else:
+    layers = [1, 2, 3, 4, 5]
+
+if args.hiddens:
+    hiddens = [args.hiddens]
+else:
+    hiddens = [16, 32, 64, 128]
+
+if args.dataset:
+    datasets = [args.dataset]
+else:
+    datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+
+if args.net:
+    nets = [eval(args.net)]
+else:
+    nets = [
+        GCNWithJK,
+        GraphSAGEWithJK,
+        GIN0WithJK,
+        GINWithJK,
+        TopK,
+        GCN,
+        GraphSAGE,
+        GIN0,
+        GIN,
+        GlobalAttentionNet,
+        Set2SetNet,
+        SortPool,
+    ]
 
 
 def logger(info):
@@ -63,8 +82,10 @@ def logger(info):
 results = []
 for dataset_name, Net in product(datasets, nets):
     best_result = (float('inf'), 0, 0, 0, 0)  # (loss, acc, std)
-    print('-----\n{} - {}'.format(dataset_name, Net.__name__))
     for num_layers, hidden in product(layers, hiddens):
+        print('-----\n{} - {} - hidden {} - layers - {} - max_degree {} - threshold {}'\
+              .format(dataset_name, Net.__name__, str(hidden), str(num_layers),\
+                      str(args.max_degree), str(args.threshold)))
         rseed(args.seed)
         nseed(args.seed)
         torch.manual_seed(args.seed)
@@ -90,7 +111,9 @@ for dataset_name, Net in product(datasets, nets):
             lr_decay_step_size=args.lr_decay_step_size,
             weight_decay=0,
             logger=None,
-            rewired=args.rewired
+            rewired=args.rewired,
+            max_degree=args.max_degree,
+            threshold=args.threshold
         )
         if loss < best_result[0]:
             best_result = (loss, acc, std, num_layers, hidden)
