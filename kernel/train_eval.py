@@ -9,6 +9,8 @@ from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from torch_sparse import SparseTensor
 from graph_dictionary.graph_classification_model import rewire_graph
 from pathlib import Path
+from copy import deepcopy
+
 
 path = Path(__file__).parent
 
@@ -16,26 +18,27 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 def cross_validation_with_val_set(dataset, model, epochs, batch_size, lr,
                                   lr_decay_factor,lr_decay_step_size, weight_decay,
-                                  logger=None, rewired=False, max_degree=5, threshold=0.01):
+                                  logger=None, rewired=False, keep_num_edges=False, threshold=0.01):
 
     val_losses, accs, durations = [], [], []
     folds = 10
     for fold, (train_idx, test_idx,
                val_idx) in enumerate(zip(*k_fold(dataset, folds=folds))):
 
+        new_dataset = deepcopy(dataset)
         if rewired:
-            rewirer_model = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
-            dataset = rewire_graph(rewirer_model, dataset, max_degree=max_degree, threshold=threshold)
+            rewirer_model = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(new_dataset.name, fold))
+            new_dataset = rewire_graph(rewirer_model, new_dataset, keep_num_edges=keep_num_edges, threshold=threshold)
 
-        for i, data in enumerate(dataset):
+        for i, data in enumerate(new_dataset):
             if data.edge_index is not None:
                 adj = SparseTensor(row=data.edge_index[0], col=data.edge_index[1],
                                    sparse_sizes=(data.num_nodes, data.num_nodes))
-                dataset._data_list[i].__setattr__('adj_t', adj.t())
+                new_dataset._data_list[i].__setattr__('adj_t', adj.t())
 
-        train_dataset = dataset[train_idx]
-        test_dataset = dataset[test_idx]
-        val_dataset = dataset[val_idx]
+        train_dataset = new_dataset[train_idx]
+        test_dataset = new_dataset[test_idx]
+        val_dataset = new_dataset[val_idx]
 
         if 'adj' in train_dataset[0]:
             train_loader = DenseLoader(train_dataset, batch_size, shuffle=True)
@@ -46,7 +49,8 @@ def cross_validation_with_val_set(dataset, model, epochs, batch_size, lr,
             val_loader = DataLoader(val_dataset, batch_size, shuffle=False)
             test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
 
-        model.to(device).reset_parameters()
+        model.reset_parameters()
+        model.to(device)
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
         if torch.cuda.is_available():

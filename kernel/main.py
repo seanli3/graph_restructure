@@ -29,7 +29,7 @@ parser.add_argument('--dataset', type=str)
 parser.add_argument('--net', type=str)
 parser.add_argument('--layers', type=int)
 parser.add_argument('--hiddens', type=int)
-parser.add_argument('--max_degree', type=int, default=5)
+parser.add_argument('--keep_num_edges', action='store_true')
 parser.add_argument('--threshold', type=float, default=0.01)
 
 args = parser.parse_args()
@@ -83,9 +83,9 @@ results = []
 for dataset_name, Net in product(datasets, nets):
     best_result = (float('inf'), 0, 0, 0, 0)  # (loss, acc, std)
     for num_layers, hidden in product(layers, hiddens):
-        print('-----\n{} - {} - hidden {} - layers - {} - max_degree {} - threshold {}'\
+        print('-----\n{} - {} - hidden {} - layers - {} - keep_num_edges {} - threshold {}'\
               .format(dataset_name, Net.__name__, str(hidden), str(num_layers),\
-                      str(args.max_degree), str(args.threshold)))
+                      str(args.keep_num_edges), str(args.threshold)))
         rseed(args.seed)
         nseed(args.seed)
         torch.manual_seed(args.seed)
@@ -112,7 +112,7 @@ for dataset_name, Net in product(datasets, nets):
             weight_decay=0,
             logger=None,
             rewired=args.rewired,
-            max_degree=args.max_degree,
+            keep_num_edges=args.keep_num_edges,
             threshold=args.threshold
         )
         if loss < best_result[0]:

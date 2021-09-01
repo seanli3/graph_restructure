@@ -6,14 +6,23 @@ from kernel.train_eval import k_fold
 from graph_dictionary.graph_classification_model import DictNet
 from kernel.datasets import get_dataset
 from pathlib import Path
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--lr', type=float, default=0.05)
+parser.add_argument('--step', type=float, default=0.1)
+parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--dataset', type=str)
+parser.add_argument('--p', type=int, default=2)
+args = parser.parse_args()
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 path = Path(__file__).parent
 
 def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
-                  epochs, lr, weight_decay, patience, step):
-        model = Model(dataset, step)
+                  epochs, lr, weight_decay, patience, step, p):
+        model = Model(dataset, step, p)
         model.to(device).reset_parameters()
 
         train_dataset = dataset[train_idx]
@@ -76,17 +85,33 @@ def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
         return eval_info_early_model
 
 
-def train(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, patience=10, step=0.1):
+def train_tu(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, patience=10, step=0.1, p=2):
     train_indices, test_indices, val_indices = k_fold(dataset, splits_dir="../kernel/splits")
     for i in range(len(train_indices)):
         dataset._data_list = None
         rewirer_model = train_rewirer(dataset, DictNet, train_indices[i], val_indices[i],
-                                              test_indices[i], batch_size, epochs, lr, weight_decay, patience, step)
+                                              test_indices[i], batch_size, epochs, lr, weight_decay, patience, step, p)
         torch.save(rewirer_model, path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, i))
 
 
-datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+def train_ogb(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, patience=10, step=0.1, p=2):
+    split_idx = dataset.get_idx_split()
+    train_indices, test_indices, val_indices = split_idx["train"], split_idx['test'], split_idx['valid']
+    dataset._data_list = None
+    rewirer_model = train_rewirer(dataset, DictNet, train_indices, val_indices,
+                                  test_indices, batch_size, epochs, lr, weight_decay, patience, step, p)
+    torch.save(rewirer_model,
+               path / '../kernel/saved_models/{}_dataset.pt'.format(dataset.name))
+
+
+# datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']
+# datasets = ['MUTAG', 'PROTEINS']# , 'COLLAB']
+datasets = [args.dataset]# , 'COLLAB']
 
 for dataset_name in datasets:
     dataset = get_dataset(dataset_name)
-    train(dataset, step=0.1, lr=0.002, batch_size=256)
+    print(args)
+    if dataset_name.upper() in ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY', 'COLLAB']:
+        train_tu(dataset, step=args.step, lr=args.lr, batch_size=args.batch_size, p=args.p)
+    elif 'ogbg' in dataset_name.lower():
+        train_ogb(dataset, step=args.step, lr=args.lr, batch_size=args.batch_size, p=args.p)
