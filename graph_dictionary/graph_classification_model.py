@@ -165,7 +165,7 @@ def rewire_graph(model, dataset, keep_num_edges=False, threshold=None):
         A_hat = torch.eye(L.shape[0]).to(device) - L
         A_hat = torch.nn.functional.normalize(A_hat, dim=(0, 1), p=1)
         if keep_num_edges:
-            num_edges = min(math.floor(dataset[i].num_edges * 1.5), int(math.pow(dataset[i].num_nodes, 2)))
+            num_edges = dataset[i].num_edges
             indices = A_hat.view(-1).topk(num_edges)[1]
             rows = indices // A_hat.shape[0]
             cols = indices % A_hat.shape[0]
