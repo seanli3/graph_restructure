@@ -37,15 +37,15 @@ def symmetric(X):
 
 
 def get_class_idx(num_classes, idx, y):
-    class_idx = [(y.view(-1) == i).nonzero().view(-1).tolist() for i in range(num_classes)]
-    class_idx = filter(lambda i: len(i) != 0, class_idx)
-    class_idx = [list(set(i).intersection(set(idx.tolist()))) for i in class_idx]
-    return class_idx
+    class_idx = ( [ (y[:, j].view(-1) == i).nonzero().view(-1).tolist() for i in range(num_classes) ] for j in range(y.shape[1]) )
+    class_idx = [[list(set(i).intersection(set(idx.tolist()))) for i in class_i] for class_i in class_idx]
+    class_idx = filter(lambda class_i: len(class_i[0]) != 0 and len(class_i[1]) != 0, class_idx)
+    return list(class_idx)
 
 
 def sample_negative(num_classes, idx, y):
     class_idx = get_class_idx(num_classes, idx, y)
-    return list(product(*class_idx))
+    return [list(product(*class_i)) for class_i in class_idx]
 
 
 def sample_positive(num_classes, idx, y):
@@ -85,21 +85,24 @@ class DictNet(torch.nn.Module):
 
     def compute_loss(self, embeddings, negative_samples, positive_samples):
         homophily_loss_1 = 0
-        for group in negative_samples:
-            homophily_loss_1 -= torch.cdist(embeddings[[group]], embeddings[[group]]).mean()
+        for class_group in negative_samples:
+            homophily_loss_1_group = 0
+            for group in class_group:
+                homophily_loss_1_group -= torch.cdist(embeddings[[group]], embeddings[[group]]).mean()
+            beta = len(class_group)/self.dataset.num_classes + 1e-13
+            homophily_loss_1 += homophily_loss_1_group/beta
 
         homophily_loss_2 = 0
-        for group in positive_samples:
-            homophily_loss_2 += torch.cdist(embeddings[[group]], embeddings[[group]]).mean()
-            # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
-
-        beta = len(negative_samples)/self.dataset.num_classes + 1e-13
+        for class_group in positive_samples:
+            for group in class_group:
+                homophily_loss_2 += torch.cdist(embeddings[[group]], embeddings[[group]]).mean()
+                # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
 
         recovery_loss = 0
         dimensions = torch.sqrt(torch.tensor(float(self.C.shape[0])))
         sparsity_loss = torch.mean((dimensions - self.C.norm(p=1, dim=0)/self.C.norm(p=2, dim=0))/(dimensions - 1))
 
-        return recovery_loss + sparsity_loss + homophily_loss_2 + homophily_loss_1/beta
+        return recovery_loss + sparsity_loss + homophily_loss_2 + homophily_loss_1
 
     def forward(self, data):
         negative_samples = sample_negative(self.num_classes, torch.arange(data.num_graphs), data.y)
@@ -118,10 +121,10 @@ class DictNet(torch.nn.Module):
                     x = self.node_encoder(x, node_depth.view(-1, ))
                 else:
                     x = self.node_encoder(x)
-            if self.edge_encoder:
-                edge_attr = self.edge_encoder(g.edge_attr)
-                edge_attr_tensor = torch.zeros(g.num_nodes,g.num_nodes, self.emb_dim, device=device).index_put_(
-                    [g.edge_index[0], g.edge_index[1]], edge_attr)
+            # if self.edge_encoder:
+            #     edge_attr = self.edge_encoder(g.edge_attr)
+            #     edge_attr_tensor = torch.zeros(g.num_nodes,g.num_nodes, self.emb_dim, device=device).index_put_(
+            #         [g.edge_index[0], g.edge_index[1]], edge_attr)
             if g.edge_index.numel() == 0:
                 y_hat = x
             else:
@@ -132,12 +135,13 @@ class DictNet(torch.nn.Module):
                 A_hat = torch.eye(g.num_nodes).to(device) - L_hat
 
                 x = A_hat.mm(x)
-                if self.edge_encoder:
-                    weighted_edge_attr_tensor = A_hat.view(g.num_nodes, g.num_nodes, 1)*edge_attr_tensor
-                    index = A_hat.nonzero().T[0]
-                    y_hat = x.index_add(0, index, weighted_edge_attr_tensor[A_hat.nonzero().T[0], A_hat.nonzero().T[1]])
-                else:
-                    y_hat = x
+                # if self.edge_encoder:
+                #     weighted_edge_attr_tensor = A_hat.view(g.num_nodes, g.num_nodes, 1)*edge_attr_tensor
+                #     index = A_hat.nonzero().T[0]
+                #     y_hat = x.index_add(0, index, weighted_edge_attr_tensor[A_hat.nonzero().T[0], A_hat.nonzero().T[1]])
+                # else:
+                #     y_hat = x
+                y_hat = x
 
             embeddings[i] = y_hat.mean(dim=0)
 
