@@ -1,10 +1,8 @@
 import torch
 import torch.nn.functional as F
 from numpy.random import seed as nseed
-from .get_laplacian import get_laplacian
+from torch_geometric.utils import get_laplacian
 import numpy as np
-import math
-from torch import nn
 
 def check_symmetric(a):
     return check_equality(a, a.T)

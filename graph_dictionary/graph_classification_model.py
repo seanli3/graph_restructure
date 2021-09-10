@@ -1,9 +1,10 @@
+import math
+
 import torch
 from itertools import product
 import torch.nn.functional as F
 import numpy as np
-import math
-from .get_laplacian import get_laplacian
+from torch_geometric.utils import get_laplacian
 from ogb.graphproppred.mol_encoder import AtomEncoder,BondEncoder
 from graph_dictionary.utils import ASTNodeEncoder
 import pandas as pd
@@ -37,6 +38,7 @@ def symmetric(X):
 
 
 def get_class_idx(num_classes, idx, y):
+    y = y if len(y.shape) > 1 else y.view(-1, 1)
     class_idx = ( [ (y[:, j].view(-1) == i).nonzero().view(-1).tolist() for i in range(num_classes) ] for j in range(y.shape[1]) )
     class_idx = [[list(set(i).intersection(set(idx.tolist()))) for i in class_i] for class_i in class_idx]
     class_idx = filter(lambda class_i: len(class_i[0]) != 0 and len(class_i[1]) != 0, class_idx)
@@ -53,15 +55,15 @@ def sample_positive(num_classes, idx, y):
 
 
 class DictNet(torch.nn.Module):
-    def __init__(self, dataset, step=0.1, p=2):
+    def __init__(self, dataset, step=0.1):
         super(DictNet, self).__init__()
         self.dataset = dataset
         self.num_classes = dataset.num_classes
         self.step = step
-        self.p = p
-        # sample negative examples
-        self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1))
-        self.emb_dim = dataset.data.num_features
+        # self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1))
+        self.windows = math.ceil(2.1/self.step)
+        self.mlp = torch.nn.Sequential(torch.nn.Linear(self.windows, 2*self.windows), torch.nn.ReLU(), torch.nn.Linear(2*self.windows, 1))
+        self.emb_dim = dataset[0].num_features
         self.node_encoder = None
         self.edge_encoder = None
         if dataset.name.lower() == 'ogbg-ppa':
@@ -81,7 +83,9 @@ class DictNet(torch.nn.Module):
 
     def reset_parameters(self):
         # self.W.weight = torch.nn.Parameter(get_adjacency(self.data.edge_index))
-        torch.nn.init.xavier_normal_(self.C, 0.6)
+        for layer in self.mlp:
+            if hasattr(layer, 'reset_parameters'):
+                layer.reset_parameters()
 
     def compute_loss(self, embeddings, negative_samples, positive_samples):
         homophily_loss_1 = 0
@@ -99,18 +103,55 @@ class DictNet(torch.nn.Module):
                 # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
 
         recovery_loss = 0
-        dimensions = torch.sqrt(torch.tensor(float(self.C.shape[0])))
-        sparsity_loss = torch.mean((dimensions - self.C.norm(p=1, dim=0)/self.C.norm(p=2, dim=0))/(dimensions - 1))
+
+        # dimensions = torch.sqrt(torch.tensor(float(self.C.shape[0])))
+        # sparsity_loss = torch.mean((dimensions - self.C.norm(p=1, dim=0)/self.C.norm(p=2, dim=0))/(dimensions - 1))
+        sparsity_loss = 0
 
         return recovery_loss + sparsity_loss + homophily_loss_2 + homophily_loss_1
+
+    def decode_all(self, z):
+        return z @ z.t()
+
+    def transform_edges(self, data):
+        g = data
+        g.to(device)
+        x = g.x
+        if self.node_encoder:
+            if self.dataset.name == 'ogbg-code2':
+                node_depth = g.node_depth
+                x = self.node_encoder(x, node_depth.view(-1, ))
+            else:
+                x = self.node_encoder(x)
+        # if self.edge_encoder:
+        #     edge_attr = self.edge_encoder(g.edge_attr)
+        #     edge_attr_tensor = torch.zeros(g.num_nodes,g.num_nodes, self.emb_dim, device=device).index_put_(
+        #         [g.edge_index[0], g.edge_index[1]], edge_attr)
+        L_index, L_weight = get_laplacian(g.edge_index, normalization='sym', num_nodes=g.num_nodes)
+        L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
+        D = create_filter(L, self.step).permute(1, 2, 0)
+        L_hat = self.mlp(D).squeeze()
+        A_hat = torch.eye(g.num_nodes).to(device) - L_hat
+
+        x = A_hat.mm(x)
+
+        A_prob = torch.sigmoid(self.decode_all(x))
+        A = torch.relu(A_prob - 0.5)
+        index = A.nonzero().T
+        edge_index = index.detach()
+        edge_weight = A[index[0], index[1]].detach()
+        data.edge_index = edge_index
+        data.edge_weight = edge_weight
+        return data
+
 
     def forward(self, data):
         negative_samples = sample_negative(self.num_classes, torch.arange(data.num_graphs), data.y)
         positive_samples = sample_positive(self.num_classes, torch.arange(data.num_graphs), data.y)
 
-        C = torch.nn.functional.normalize(self.C, dim=0, p=self.p)
 
         embeddings = torch.zeros(data.num_graphs, self.emb_dim)
+        sparsity_loss =0
 
         for i in range(data.num_graphs):
             g = data[i]
@@ -131,10 +172,17 @@ class DictNet(torch.nn.Module):
                 L_index, L_weight = get_laplacian(g.edge_index, normalization='sym', num_nodes=g.num_nodes)
                 L = torch.sparse_coo_tensor(L_index, L_weight).to_dense().to(device)
                 D = create_filter(L, self.step).permute(1, 2, 0)
-                L_hat = D.matmul(C).squeeze()
+                L_hat = self.mlp(D).squeeze()
                 A_hat = torch.eye(g.num_nodes).to(device) - L_hat
 
                 x = A_hat.mm(x)
+
+                A_prob = torch.sigmoid(self.decode_all(x))
+                A = torch.relu(A_prob - 0.5)
+                # deg = torch.diag(A.sum(dim=1).pow(-0.5))
+                # A_tilde = deg.mm(A).mm(deg)
+                # sparsity_loss += A.norm(p=1)/(g.num_nodes*g.num_nodes)
+
                 # if self.edge_encoder:
                 #     weighted_edge_attr_tensor = A_hat.view(g.num_nodes, g.num_nodes, 1)*edge_attr_tensor
                 #     index = A_hat.nonzero().T[0]
@@ -144,6 +192,7 @@ class DictNet(torch.nn.Module):
                 y_hat = x
 
             embeddings[i] = y_hat.mean(dim=0)
+            # sparsity_loss /= data.num_graphs
 
         return self.compute_loss(embeddings, negative_samples, positive_samples)
 

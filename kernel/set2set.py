@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import SAGEConv
-from kernel.layers.set2set import Set2Set
+from torch_geometric.nn import SAGEConv, Set2Set
 
 
 class Set2SetNet(torch.nn.Module):
@@ -25,10 +24,11 @@ class Set2SetNet(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, batch = data.x, data.adj_t, data.batch
-        x = F.relu(self.conv1(x, adj_t))
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
         for conv in self.convs:
-            x = F.relu(conv(x, adj_t))
+            x = F.relu(conv(x, edge_index, edge_weight))
         x = self.set2set(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)

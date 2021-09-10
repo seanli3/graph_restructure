@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import (GraphConv, SAGPooling, JumpingKnowledge)
-from kernel.utils import global_mean_pool_deterministic
+from torch_geometric.nn import (GraphConv, SAGPooling, global_mean_pool,
+                                JumpingKnowledge)
 
 
 class SAGPool(torch.nn.Module):
@@ -31,12 +31,13 @@ class SAGPool(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, batch = data.x, data.adj_t, data.batch
-        x = F.relu(self.conv1(x, adj_t))
-        xs = [global_mean_pool_deterministic(x, batch)]
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        xs = [global_mean_pool(x, batch)]
         for i, conv in enumerate(self.convs):
-            x = F.relu(conv(x, adj_t))
-            xs += [global_mean_pool_deterministic(x, batch)]
+            x = F.relu(conv(x, edge_index, edge_weight))
+            xs += [global_mean_pool(x, batch)]
             if i % 2 == 0 and i < len(self.convs) - 1:
                 pool = self.pools[i // 2]
                 x, edge_index, _, batch, _, _ = pool(x, edge_index,

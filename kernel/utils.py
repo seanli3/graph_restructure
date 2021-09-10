@@ -24,6 +24,6 @@ def index_to_ptr(index):
     size = bins.shape[0]
     m = bins.repeat(size).view(size, -1)
     triu_indices = torch.triu_indices(row=size, col=size, offset=1, device=device)
-    m[triu_indices[0], triu_indices[1]] = 0
+    m[triu_indices[0], triu_indices[1]] = torch.zeros(triu_indices[0].shape[0], device=device).long()
     ptr = torch.cat([torch.tensor([0], device=device), m.sum(dim=1)])
     return ptr

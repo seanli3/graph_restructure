@@ -1,14 +1,10 @@
 from itertools import product
-
 import argparse
-from kernel.datasets import get_dataset
 from kernel.train_eval import cross_validation_with_val_set
-
 from kernel.gcn import GCN, GCNWithJK
 from kernel.graph_sage import GraphSAGE, GraphSAGEWithJK
 from kernel.gin import GIN0, GIN0WithJK, GIN, GINWithJK
 from kernel.top_k import TopK
-from kernel.diff_pool import DiffPool
 from kernel.global_attention import GlobalAttentionNet
 from kernel.set2set import Set2SetNet
 from kernel.sort_pool import SortPool
@@ -29,13 +25,8 @@ parser.add_argument('--dataset', type=str)
 parser.add_argument('--net', type=str)
 parser.add_argument('--layers', type=int)
 parser.add_argument('--hiddens', type=int)
-parser.add_argument('--keep_num_edges', action='store_true')
-parser.add_argument('--threshold', type=float, default=0.01)
 
 args = parser.parse_args()
-
-torch.use_deterministic_algorithms(True)
-torch.backends.cudnn.deterministic = True
 
 args.cuda = args.cuda and torch.cuda.is_available()
 
@@ -83,9 +74,8 @@ results = []
 for dataset_name, Net in product(datasets, nets):
     best_result = (float('inf'), 0, 0, 0, 0)  # (loss, acc, std)
     for num_layers, hidden in product(layers, hiddens):
-        print('-----\n{} - {} - hidden {} - layers - {} - keep_num_edges {} - threshold {}'\
-              .format(dataset_name, Net.__name__, str(hidden), str(num_layers),\
-                      str(args.keep_num_edges), str(args.threshold)))
+        print('-----\n{} - {} - hidden {} - layers - {}'\
+              .format(dataset_name, Net.__name__, str(hidden), str(num_layers)))
         rseed(args.seed)
         nseed(args.seed)
         torch.manual_seed(args.seed)
@@ -99,11 +89,11 @@ for dataset_name, Net in product(datasets, nets):
         else:
             torch.set_num_threads(8)
 
-        dataset = get_dataset(dataset_name, sparse=Net != DiffPool)
-        model = Net(dataset, num_layers, hidden)
         loss, acc, std = cross_validation_with_val_set(
-            dataset,
-            model,
+            dataset_name,
+            Net,
+            num_layers=num_layers,
+            hidden=hidden,
             epochs=args.epochs,
             batch_size=args.batch_size,
             lr=args.lr,
@@ -111,14 +101,12 @@ for dataset_name, Net in product(datasets, nets):
             lr_decay_step_size=args.lr_decay_step_size,
             weight_decay=0,
             logger=None,
-            rewired=args.rewired,
-            keep_num_edges=args.keep_num_edges,
-            threshold=args.threshold
+            rewired=args.rewired
         )
         if loss < best_result[0]:
             best_result = (loss, acc, std, num_layers, hidden)
 
     desc = '{:.3f} ± {:.3f}, hidden: {}, layer: {}'.format(best_result[1], best_result[2], best_result[4], best_result[3])
     print('Best result - {}'.format(desc))
-    results += ['{} - {}: {}'.format(dataset_name, model, desc)]
+    results += ['{} - {}: {}'.format(dataset_name, Net, desc)]
 print('-----\n{}'.format('\n'.join(results)))

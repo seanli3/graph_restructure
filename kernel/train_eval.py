@@ -6,35 +6,37 @@ from torch import tensor
 from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
-from torch_sparse import SparseTensor
-from graph_dictionary.graph_classification_model import rewire_graph
+from kernel.diff_pool import DiffPool
+from graph_dictionary.graph_classification_model import rewire_graph, DictNet
 from pathlib import Path
-from copy import deepcopy
+from kernel.datasets import get_dataset
 
 
 path = Path(__file__).parent
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-def cross_validation_with_val_set(dataset, model, epochs, batch_size, lr,
+def cross_validation_with_val_set(dataset_name, Net, epochs, batch_size, lr,
                                   lr_decay_factor,lr_decay_step_size, weight_decay,
-                                  logger=None, rewired=False, keep_num_edges=False, threshold=0.01):
+                                  num_layers, hidden, logger=None, rewired=False):
 
     val_losses, accs, durations = [], [], []
     folds = 10
+    dataset = get_dataset(dataset_name, sparse=Net != DiffPool)
     for fold, (train_idx, test_idx,
                val_idx) in enumerate(zip(*k_fold(dataset, folds=folds))):
 
-        new_dataset = deepcopy(dataset)
         if rewired:
-            rewirer_model = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(new_dataset.name, fold))
-            new_dataset = rewire_graph(rewirer_model, new_dataset, keep_num_edges=keep_num_edges, threshold=threshold)
-
-        for i, data in enumerate(new_dataset):
-            if data.edge_index is not None:
-                adj = SparseTensor(row=data.edge_index[0], col=data.edge_index[1],
-                                   sparse_sizes=(data.num_nodes, data.num_nodes))
-                new_dataset._data_list[i].__setattr__('adj_t', adj.t())
+            rewirer_state = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
+            step = 2.1/rewirer_state['model']['mlp.0.weight'].shape[1]
+            rewirer = DictNet(dataset, step)
+            rewirer.load_state_dict(rewirer_state['model'])
+            rewirer.eval()
+            rewirer.to(device)
+            new_dataset = get_dataset(dataset_name, sparse=Net != DiffPool, transform=rewirer.transform_edges)
+        else:
+            new_dataset = get_dataset(dataset_name, sparse=Net != DiffPool)
+        model = Net(new_dataset, num_layers, hidden)
 
         train_dataset = new_dataset[train_idx]
         test_dataset = new_dataset[test_idx]

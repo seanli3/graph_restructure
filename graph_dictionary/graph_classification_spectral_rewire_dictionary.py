@@ -22,7 +22,7 @@ path = Path(__file__).parent
 
 def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
                   epochs, lr, weight_decay, patience, step, p):
-        model = Model(dataset, step, p)
+        model = Model(dataset, step)
         model.to(device).reset_parameters()
 
         train_dataset = dataset[train_idx]
@@ -46,7 +46,7 @@ def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
         for epoch in pbar:
             model.train()
             # Predict and calculate loss for user factor and bias
-            optimizer = torch.optim.Adam([model.C], lr=lr,
+            optimizer = torch.optim.Adam(model.parameters(), lr=lr,
                                         weight_decay=weight_decay)  # learning rate
 
             train_loss = 0
@@ -67,14 +67,14 @@ def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
                     val_loss = model(data)
             val_loss = val_loss / math.ceil(len(val_loader.dataset)/batch_size)
 
-            pbar.set_description('Epoch: {}, training loss: {:.4f}, validation loss: {:.4f}'.format(
+            pbar.set_description('Epoch: {}, training loss: {:.6f}, validation loss: {:.6f}'.format(
                 epoch, train_loss, val_loss))
 
             if val_loss < best_val_loss:
                 eval_info_early_model['train_loss'] = train_loss
                 eval_info_early_model['val_loss'] = val_loss
                 eval_info_early_model['epoch'] = epoch
-                eval_info_early_model['C'] = torch.clone(model.C.detach())
+                eval_info_early_model['model'] = torch.clone(model.state_dict())
                 best_val_loss = val_loss
                 bad_counter = 0
                 # torch.save(eval_info_early_model, './{}_best_model_split_{}.pt'.format(DATASET, split))
@@ -85,7 +85,7 @@ def train_rewirer(dataset, Model, train_idx, val_idx, test_idx, batch_size,
         return eval_info_early_model
 
 
-def train_tu(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, patience=10, step=0.1, p=2):
+def train_tu(dataset, batch_size=128, epochs=100, lr=0.01, weight_decay=0.0005, patience=10, step=0.1, p=2):
     train_indices, test_indices, val_indices = k_fold(dataset, splits_dir="../kernel/splits")
     for i in range(len(train_indices)):
         dataset._data_list = None

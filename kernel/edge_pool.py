@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import (GraphConv, EdgePooling, JumpingKnowledge)
-from kernel.utils import global_mean_pool_deterministic
+from torch_geometric.nn import (GraphConv, EdgePooling, global_mean_pool,
+                                JumpingKnowledge)
 
 
 class EdgePool(torch.nn.Module):
@@ -31,12 +31,13 @@ class EdgePool(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, edge_index, batch = data.x, data.adj_t, data.edge_index, data.batch
-        x = F.relu(self.conv1(x, adj_t))
-        xs = [global_mean_pool_deterministic(x, batch)]
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        xs = [global_mean_pool(x, batch)]
         for i, conv in enumerate(self.convs):
-            x = F.relu(conv(x, adj_t))
-            xs += [global_mean_pool_deterministic(x, batch)]
+            x = F.relu(conv(x, edge_index, edge_weight))
+            xs += [global_mean_pool(x, batch)]
             if i % 2 == 0 and i < len(self.convs) - 1:
                 pool = self.pools[i // 2]
                 x, edge_index, batch, _ = pool(x, edge_index, batch=batch)

@@ -4,7 +4,7 @@ from random import seed as rseed
 from numpy.random import seed as nseed
 from webkb import get_dataset, run
 from torch.nn import functional as F
-from .get_laplacian import get_laplacian
+from torch_geometric.utils import get_laplacian
 from torch_geometric.nn.inits import glorot
 
 parser = argparse.ArgumentParser()

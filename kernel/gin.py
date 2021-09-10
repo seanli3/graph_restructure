@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear, Sequential, ReLU, BatchNorm1d as BN
-from torch_geometric.nn import GINConv, JumpingKnowledge
-from kernel.utils import global_mean_pool_deterministic
+from torch_geometric.nn import GINConv, global_mean_pool, JumpingKnowledge
 
 
 class GIN0(torch.nn.Module):
@@ -38,11 +37,12 @@ class GIN0(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, batch = data.x, data.adj_t, data.batch
-        x = self.conv1(x, adj_t)
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = self.conv1(x, edge_index, edge_weight)
         for conv in self.convs:
-            x = conv(x, adj_t)
-        x = global_mean_pool_deterministic(x, batch)
+            x = conv(x, edge_index, edge_weight)
+        x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -90,14 +90,15 @@ class GIN0WithJK(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, batch = data.x, data.adj_t, data.batch
-        x = self.conv1(x, adj_t)
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = self.conv1(x, edge_index, edge_weight)
         xs = [x]
         for conv in self.convs:
-            x = conv(x, adj_t)
+            x = conv(x, edge_index, edge_weight)
             xs += [x]
         x = self.jump(xs)
-        x = global_mean_pool_deterministic(x, batch)
+        x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -140,11 +141,12 @@ class GIN(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, batch = data.x, data.adj_t, data.batch
-        x = self.conv1(x, adj_t)
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = self.conv1(x, edge_index, edge_weight)
         for conv in self.convs:
-            x = conv(x, adj_t)
-        x = global_mean_pool_deterministic(x, batch)
+            x = conv(x, edge_index, edge_weight)
+        x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
@@ -192,14 +194,15 @@ class GINWithJK(torch.nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, data):
-        x, adj_t, batch = data.x, data.adj_t, data.batch
-        x = self.conv1(x, adj_t)
+        x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
+                                            data.edge_weight if hasattr(data, 'edge_weight') else None
+        x = self.conv1(x, edge_index, edge_weight)
         xs = [x]
         for conv in self.convs:
-            x = conv(x, adj_t)
+            x = conv(x, edge_index, edge_weight)
             xs += [x]
         x = self.jump(xs)
-        x = global_mean_pool_deterministic(x, batch)
+        x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
