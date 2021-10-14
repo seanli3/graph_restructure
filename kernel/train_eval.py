@@ -7,7 +7,8 @@ from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from kernel.diff_pool import DiffPool
-from graph_dictionary.graph_classification_model import rewire_graph, DictNet
+from graph_dictionary.model import RewireNetGraphClassification
+from graph_dictionary.utils import rewire_graph
 from pathlib import Path
 from kernel.datasets import get_dataset
 
@@ -28,8 +29,8 @@ def cross_validation_with_val_set(dataset_name, Net, epochs, batch_size, lr,
 
         if rewired:
             rewirer_state = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
-            step = 2.1/rewirer_state['model']['mlp.0.weight'].shape[1]
-            rewirer = DictNet(dataset, step)
+            step = rewirer_state['model']['step']
+            rewirer = RewireNetGraphClassification(dataset, step)
             rewirer.load_state_dict(rewirer_state['model'])
             rewirer.eval()
             rewirer.to(device)

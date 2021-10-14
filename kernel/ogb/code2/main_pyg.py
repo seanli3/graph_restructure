@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from gnn import GNN
 from pathlib import Path
-from graph_dictionary.graph_classification_model import rewire_graph
+from graph_dictionary.utils import rewire_graph
 
 from tqdm import tqdm
 import argparse

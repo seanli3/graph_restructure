@@ -27,9 +27,9 @@ class SortPool(torch.nn.Module):
     def forward(self, data):
         x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
                                             data.edge_weight if hasattr(data, 'edge_weight') else None
-        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        x = F.relu(self.conv1(x, edge_index))
         for conv in self.convs:
-            x = F.relu(conv(x, edge_index, edge_weight))
+            x = F.relu(conv(x, edge_index))
         x = global_sort_pool(x, batch, self.k)
         x = x.view(len(x), self.k, -1).permute(0, 2, 1)
         x = F.relu(self.conv1d(x))

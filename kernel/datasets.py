@@ -82,8 +82,13 @@ def get_dataset(name, sparse=True, cleaned=False, transform=None):
             dataset.transform = T.Compose(
                 [dataset.transform, T.ToDense(num_nodes)])
 
-    if transform is not None and dataset.transform is not None:
-        dataset.transform = T.Compose([dataset.transform, transform])
-    elif transform is not None:
-        dataset.transform = transform
+    # Using dataset.transform will perform transformation everytime data is accessed, so disable it for perfomrnace
+    # if transform is not None and dataset.transform is not None:
+    #     dataset.transform = T.Compose([dataset.transform, transform])
+    # elif transform is not None:
+    #     dataset.transform = transform
+
+    # transforming whole graph at once is more performant
+    if transform:
+        dataset = transform(dataset)
     return dataset

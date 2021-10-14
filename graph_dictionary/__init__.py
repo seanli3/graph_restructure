@@ -1,5 +1,7 @@
 from . import model
+from . import utils
 
 __all__ = [
-    'model'
+    'model',
+    'utils'
 ]

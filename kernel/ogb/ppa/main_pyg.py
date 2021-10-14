@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from gnn import GNN
 from pathlib import Path
-from graph_dictionary.graph_classification_model import rewire_graph
+from graph_dictionary.utils import rewire_graph
 import os.path as osp
 
 from tqdm import tqdm

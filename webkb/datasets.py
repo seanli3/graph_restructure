@@ -242,7 +242,7 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
     dataset.data.edge_index = adj.nonzero(as_tuple=False).T
     # dataset.data.node_map = node_map
     dataset.data, dataset.slices = dataset.collate([dataset.data])
-    del dataset.__data_list__
+    del dataset._data_list
     # assert (nx.is_connected(to_networkx(dataset[0]).to_undirected()))
 
     if cuda:

@@ -272,18 +272,15 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
 
     dataset.data.edge_index = adj.nonzero(as_tuple=False).T
     dataset.data, dataset.slices = dataset.collate([dataset.data])
-    if hasattr(dataset, '__data_list__'):
-        del dataset.__data_list__
+    if hasattr(dataset, '_data_list'):
+        del dataset._data_list
 
     if cuda:
         dataset.data.to('cuda')
-        if hasattr(dataset, '__data_list__') and dataset._data_list:
-            for d in dataset.__data_list__:
+        if hasattr(dataset, '_data_list') and dataset._data_list is not None:
+            for d in dataset._data_list:
                 d.to('cuda')
 
-
-
-    torch.save(dataset, './sparsified_graph.pt')
-
+    # torch.save(dataset, './sparsified_graph.pt')
     return dataset
     # return torch.load('./sparsified_graph.pt')

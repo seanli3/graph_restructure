@@ -24,9 +24,9 @@ class GraphSAGE(torch.nn.Module):
     def forward(self, data):
         x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
                                             data.edge_weight if hasattr(data, 'edge_weight') else None
-        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        x = F.relu(self.conv1(x, edge_index))
         for conv in self.convs:
-            x = F.relu(conv(x, edge_index, edge_weight))
+            x = F.relu(conv(x, edge_index))
         x = global_mean_pool(x, batch)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
@@ -62,10 +62,10 @@ class GraphSAGEWithJK(torch.nn.Module):
     def forward(self, data):
         x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
                                             data.edge_weight if hasattr(data, 'edge_weight') else None
-        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        x = F.relu(self.conv1(x, edge_index))
         xs = [x]
         for conv in self.convs:
-            x = F.relu(conv(x, edge_index, edge_weight))
+            x = F.relu(conv(x, edge_index))
             xs += [x]
         x = self.jump(xs)
         x = global_mean_pool(x, batch)

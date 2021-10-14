@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="li243@bracewell-i1.hpc.csiro.au:22 agent" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="li243@bracewell-i1.hpc.csiro.au:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/datastore/li243/graph_rewire" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="li243@bracewell-i1.hpc.csiro.au:22 (2)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/datasource/li243/rewire" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="li243@bracewell-i1.hpc.csiro.au:22 (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/datastore/li243/rewire" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="li243@bracewell-i1.hpc.csiro.au:22 agent">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/datastore/li243/graph_rewire" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

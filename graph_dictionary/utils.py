@@ -1,7 +1,12 @@
-import torch
-from collections import Counter
 import numpy as np
 import torch
+import math
+from itertools import product
+from numpy.random import seed as nseed
+from torch_geometric.utils import get_laplacian
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
 
 class ASTNodeEncoder(torch.nn.Module):
     '''
@@ -26,7 +31,6 @@ class ASTNodeEncoder(torch.nn.Module):
     def forward(self, x, depth):
         depth[depth > self.max_depth] = self.max_depth
         return self.type_encoder(x[:,0]) + self.attribute_encoder(x[:,1]) + self.depth_encoder(depth)
-
 
 
 def get_vocab_mapping(seq_list, num_vocab):
@@ -85,6 +89,7 @@ def get_vocab_mapping(seq_list, num_vocab):
 
     return vocab2idx, idx2vocab
 
+
 def augment_edge(data):
     '''
         Input:
@@ -135,6 +140,7 @@ def augment_edge(data):
 
     return data
 
+
 def encode_y_to_arr(data, vocab2idx, max_seq_len):
     '''
     Input:
@@ -151,6 +157,7 @@ def encode_y_to_arr(data, vocab2idx, max_seq_len):
     data.y_arr = encode_seq_to_arr(seq, vocab2idx, max_seq_len)
 
     return data
+
 
 def encode_seq_to_arr(seq, vocab2idx, max_seq_len):
     '''
@@ -204,7 +211,102 @@ def test():
         print('')
 
 
+def create_filter(laplacian, step):
+    part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1/step - 1))
+    part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(0, 2.1, step, device=device).view(
+        -1, 1, 1)).matrix_power(4)
+    part3 = torch.eye(laplacian.shape[0], device=device)
+    return (part1.matmul(part2) + part3).matrix_power(-2)
+
+
+def check_symmetric(a):
+    return check_equality(a, a.T)
+
+
+def check_equality(a, b, rtol=1e-05, atol=1e-03):
+    return np.allclose(a, b, rtol=rtol, atol=atol)
+
+
+def get_adjacency(edge_index):
+    return torch.sparse_coo_tensor(edge_index, torch.ones(edge_index.shape[1])).to_dense()
+
+
+def symmetric(X):
+    return X.triu() + X.triu(1).transpose(-1, -2)
+
+
+def get_class_idx(num_classes, idx, y):
+    y = y if len(y.shape) > 1 else y.view(-1, 1)
+    class_idx = ( [ (y[:, j].view(-1) == i).nonzero().view(-1).tolist() for i in range(num_classes) ] for j in range(y.shape[1]) )
+    class_idx = [[list(set(i).intersection(set(idx.tolist()))) for i in class_i] for class_i in class_idx]
+    class_idx = filter(lambda class_i: len(class_i[0]) != 0 and len(class_i[1]) != 0, class_idx)
+    return list(class_idx)
+
+
+def sample_negative_graphs(num_classes, idx, y):
+    class_idx = get_class_idx(num_classes, idx, y)
+    return [list(product(*class_i)) for class_i in class_idx]
+
+
+def sample_positive_graphs(num_classes, idx, y):
+    return get_class_idx(num_classes, idx, y)
+
+
+def sample_negative(num_classes, mask, y):
+    negative_samples = []
+    selectedNodes = set()
+    for _ in range(len(mask.nonzero(as_tuple=True)[0])):
+        nodes = []
+        for i in range(num_classes):
+            if y[mask].bincount()[i] <= len(negative_samples):
+                continue
+            iter = 0
+            while True:
+                iter += 1
+                n = np.random.choice((y.cpu() == i).logical_and(mask.cpu()).nonzero(as_tuple=True)[0])
+                if n not in selectedNodes:
+                    selectedNodes.add(n)
+                    nodes.append(n)
+                    break
+                if iter > 100:
+                    break
+        negative_samples.append(nodes)
+    return list(filter(lambda s: len(s) > 1, negative_samples))
+
+
+def rewire_graph(model, dataset, keep_num_edges=False, threshold=None):
+    C = model['C']
+    step = 2.1/C.shape[0]
+
+    dictionary = {}
+    for i in range(len(dataset)):
+        L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
+        L = torch.zeros(dataset[i].num_nodes, dataset[i].num_nodes, device=L_index.device)
+        L = L.index_put((L_index[0], L_index[1]), L_weight).to(device)
+        D = create_filter(L, step).permute(1, 2, 0)
+        dictionary[i] = D
+
+    C = torch.nn.functional.normalize(C, dim=0, p=2)
+
+    for i in range(len(dataset)):
+        D = dictionary[i]
+        L = D.matmul(C).squeeze()
+
+        A_hat = torch.eye(L.shape[0]).to(device) - L
+        A_hat = torch.nn.functional.normalize(A_hat, dim=(0, 1), p=1)
+        if keep_num_edges:
+            num_edges = dataset[i].num_edges
+            indices = A_hat.view(-1).topk(num_edges)[1]
+            rows = indices // A_hat.shape[0]
+            cols = indices % A_hat.shape[0]
+            edge_index = torch.stack([rows, cols], dim=0)
+        else:
+            A_hat = A_hat.abs() >= threshold
+            edge_index = A_hat.nonzero().T
+        dataset._data_list[i].edge_index = edge_index
+    return dataset
 
 
 if __name__ == '__main__':
     test()
+

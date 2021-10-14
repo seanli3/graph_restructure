@@ -5,7 +5,8 @@ from torch_geometric.nn import GCNConv
 from random import seed as rseed
 from numpy.random import seed as nseed
 from torch_geometric.utils import get_laplacian
-from graph_dictionary.model import create_filter
+from graph_dictionary.utils import create_filter
+from pathlib import Path
 
 from citation import get_dataset, random_planetoid_splits, run, random_coauthor_amazon_splits
 
@@ -30,6 +31,9 @@ parser.add_argument('--cuda', action='store_true')
 parser.add_argument('--dissimilar_t', type=float, default=1)
 args = parser.parse_args()
 
+
+path = Path(__file__).parent
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 rseed(args.seed)
 nseed(args.seed)
@@ -70,31 +74,32 @@ elif args.dataset == "CS" or args.dataset == "Physics":
 elif args.dataset == "Computers" or args.dataset == "Photo":
     permute_masks = random_coauthor_amazon_splits
 
-def use_dataset():        
-    saved = torch.load('./{}_best_model_split_0.pt'.format(args.dataset))
+
+def use_dataset():
+    saved = torch.load(path / '../graph_dictionary/{}_best_model_split_0.pt'.format(args.dataset))
     C = saved['C']
     # C = torch.nn.functional.normalize(C, dim=0, p=1)
     C = torch.nn.functional.normalize(C, dim=0, p=2)
+    step = saved['step']
 
     dataset = get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
                permute_masks=None, cuda=args.cuda, lcc=args.lcc,
                node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t)
     data = dataset[0]
     L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
-    laplacian = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
-    filters = [create_filter(laplacian, b) for b in range(len(C))]
-    # D = torch.stack([f.mm(data.x) for f in filters], dim=2)
-    L = torch.stack(filters, dim=2).matmul(C).squeeze()
+    laplacian = torch.sparse_coo_tensor(L_index, L_weight, device=device).to_dense()
+    D = create_filter(laplacian, step).permute(1,2,0)
+    L = D.matmul(C).squeeze()
 
-    A_hat = torch.eye(L.shape[0]) - L
+    A_hat = torch.eye(L.shape[0], device=device) - L
     A_hat = torch.nn.functional.normalize(A_hat, dim=1, p=2)
 
-    # k = 100
-    # A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1])\
-    #     .index_put((torch.arange(A_hat.shape[0]).repeat_interleave(k), A_hat.abs().topk(k, dim=1, largest=True)[1].view(-1)), torch.tensor(1.))
-    # A_one_zero += A_one_zero.T
-    # A_one_zero /= 2
-    A_one_zero = torch.sparse_coo_tensor(data.edge_index, torch.ones(dataset[0].num_edges)).to_dense()
+    # sparsify edges
+    k = 8
+    A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1], device=device) \
+        .index_put((torch.arange(A_hat.shape[0], device=device).repeat_interleave(k), A_hat.topk(k, dim=1, largest=True)[1].view(-1)), torch.tensor(1., device=device))
+    # A_one_zero = torch.ones(dataset.data.num_nodes, dataset.data.num_nodes, device=device)
+    # A_one_zero.masked_fill_(A_hat.abs() < 0.2, 0)
     A_one_zero.masked_fill_(A_hat.abs() < 0.001, 0)
 
     # v, i = torch.topk(A_hat.flatten(), k*A_hat.shape[0])
@@ -106,7 +111,7 @@ def use_dataset():
     # edge_weight = A_hat[A_hat > 0]
 
     # L = laplacian.abs() > 0.05
-    A = torch.sparse_coo_tensor(data.edge_index, torch.ones(dataset[0].num_edges)).to_dense()
+    A = torch.sparse_coo_tensor(data.edge_index, torch.ones(dataset[0].num_edges), device=device).to_dense()
 
     edges_to_add = (A_one_zero != 0).logical_and((A == 0)).nonzero()
     edges_to_remove = (A != 0).logical_and((A_one_zero == 0)).nonzero()

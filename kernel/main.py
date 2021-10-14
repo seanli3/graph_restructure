@@ -8,6 +8,11 @@ from kernel.top_k import TopK
 from kernel.global_attention import GlobalAttentionNet
 from kernel.set2set import Set2SetNet
 from kernel.sort_pool import SortPool
+from kernel.asap import ASAP
+from kernel.diff_pool import DiffPool
+from kernel.edge_pool import EdgePool
+from kernel.graclus import Graclus
+from kernel.sag_pool import SAGPool
 from random import seed as rseed
 from numpy.random import seed as nseed
 import torch
@@ -53,7 +58,6 @@ else:
         GraphSAGEWithJK,
         GIN0WithJK,
         GINWithJK,
-        TopK,
         GCN,
         GraphSAGE,
         GIN0,
@@ -61,6 +65,7 @@ else:
         GlobalAttentionNet,
         Set2SetNet,
         SortPool,
+        ASAP
     ]
 
 

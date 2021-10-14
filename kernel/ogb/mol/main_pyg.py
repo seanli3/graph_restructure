@@ -5,7 +5,8 @@ import os.path as osp
 import torch.nn.functional as F
 from kernel.ogb.mol.gnn import GNN
 from pathlib import Path
-from graph_dictionary.graph_classification_model import rewire_graph
+from graph_dictionary.model import RewireNetGraphClassification
+from kernel.datasets import get_dataset
 
 from tqdm import tqdm
 import argparse
@@ -90,8 +91,6 @@ def main():
     parser.add_argument('--filename', type=str, default="",
                         help='filename to output result (default: )')
     parser.add_argument('--rewired', action='store_true')
-    parser.add_argument('--keep_num_edges', action='store_true')
-    parser.add_argument('--threshold', type=float, default=0.01)
     args = parser.parse_args()
 
     print(args)
@@ -104,9 +103,13 @@ def main():
 
     if args.rewired:
         path = Path(__file__).parent
-        rewirer_model = torch.load(
-            path / '../../saved_models/{}_dataset.pt'.format(dataset.name))
-        dataset = rewire_graph(rewirer_model, dataset, keep_num_edges=args.keep_num_edges, threshold=args.threshold)
+        rewirer_state = torch.load(path / '../../saved_models/{}_dataset.pt'.format(dataset.name))
+        step = rewirer_state['step']
+        rewirer = RewireNetGraphClassification(dataset, step)
+        rewirer.load_state_dict(rewirer_state['model'])
+        rewirer.eval()
+        rewirer.to(device)
+        dataset = get_dataset(dataset.name, transform=rewirer.transform_edges)
 
     if args.feature == 'full':
         pass 

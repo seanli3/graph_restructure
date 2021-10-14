@@ -35,7 +35,7 @@ class ASAP(torch.nn.Module):
     def forward(self, data):
         x, batch, edge_index, edge_weight = data.x, data.batch, data.edge_index, \
                                             data.edge_weight if hasattr(data, 'edge_weight') else None
-        x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
         xs = [global_mean_pool(x, batch)]
         for i, conv in enumerate(self.convs):
             x = conv(x=x, edge_index=edge_index, edge_weight=edge_weight)

@@ -5,7 +5,7 @@ from numpy.random import seed as nseed
 from webkb import get_dataset, run
 from torch import nn
 from torch_geometric.utils import get_laplacian
-from graph_dictionary.model import create_filter
+from graph_dictionary.utils import create_filter
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
