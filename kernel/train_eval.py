@@ -29,7 +29,8 @@ def cross_validation_with_val_set(dataset_name, Net, epochs, batch_size, lr,
 
         if rewired:
             rewirer_state = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
-            step = rewirer_state['model']['step']
+            # step = rewirer_state['model']['step']
+            step = 0.1
             rewirer = RewireNetGraphClassification(dataset, step)
             rewirer.load_state_dict(rewirer_state['model'])
             rewirer.eval()
