@@ -66,9 +66,7 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
 
     dataset.data, dataset.slices = dataset.collate([dataset.data])
 
-    if transform is not None and normalize_features:
-        dataset.transform = T.Compose([T.NormalizeFeatures(), transform])
-    elif normalize_features:
+    if normalize_features:
         dataset.transform = T.NormalizeFeatures()
 
     lcc_mask = None

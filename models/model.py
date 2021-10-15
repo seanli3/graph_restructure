@@ -5,6 +5,8 @@ import torch
 import torch.nn.functional as F
 from ogb.graphproppred.mol_encoder import BondEncoder, AtomEncoder
 from torch_geometric.utils import get_laplacian
+
+from config import EDGE_LOGIT_THRESHOLD
 from .utils import (
     create_filter, check_symmetric, get_adjacency, get_class_idx, sample_negative_graphs, sample_positive_graphs,
     sample_negative, ASTNodeEncoder,
@@ -116,9 +118,12 @@ class RewireNetNodeClassification(torch.nn.Module):
         # I - L low-pass filter
         y_hat = (self.I - L_hat).mm(x)
 
+        y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
+        edge_logits = self.decode_all(y_hat)
+        sparsity_loss = torch.relu(edge_logits - EDGE_LOGIT_THRESHOLD).norm(p=1)/edge_logits.numel()
         # concatenate filtered feature with original node feature?
         # y_hat = torch.cat(y_hat, self.data.x)
-        return self.compute_loss(y_hat, mask, C)
+        return self.compute_loss(y_hat, mask, C) + sparsity_loss
 
     def decode_all(self, z):
         return z @ z.t()
@@ -129,8 +134,9 @@ class RewireNetNodeClassification(torch.nn.Module):
         C = torch.nn.functional.normalize(self.C, dim=0, p=2)
         L_hat = D.matmul(C).squeeze()
         y_hat = (self.I - L_hat).mm(x)
-        A_prob = torch.sigmoid(self.decode_all(y_hat))
-        A = A_prob.where(A_prob > 0.5, torch.tensor(0., device=device))
+        y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
+        edge_logits = self.decode_all(y_hat)
+        A = edge_logits.where(edge_logits > EDGE_LOGIT_THRESHOLD, torch.tensor(0., device=device))
         index = A.nonzero().T
         edge_index = index.detach()
         # edge_weight = A[index[0], index[1]].detach()
@@ -233,11 +239,10 @@ class RewireNetGraphClassification(torch.nn.Module):
             C = torch.nn.functional.normalize(self.C, dim=0, p=2)
             L_hat = D.matmul(C).squeeze()
             A_hat = torch.eye(g.num_nodes).to(device) - L_hat
-
-            x = A_hat.mm(x)
-
-            A_prob = torch.sigmoid(self.decode_all(x))
-            A = A_prob.where(A_prob > 0.5, torch.tensor(0., device=device))
+            y_hat = A_hat.mm(x)
+            y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
+            edge_logits = self.decode_all(y_hat)
+            A = edge_logits.where(edge_logits > EDGE_LOGIT_THRESHOLD, torch.tensor(0., device=device))
             index = A.nonzero().T
             edge_index = index.detach()
             # edge_weight = A[index[0], index[1]].detach()
@@ -285,24 +290,17 @@ class RewireNetGraphClassification(torch.nn.Module):
                 L_hat = D.matmul(C).squeeze()
                 A_hat = torch.eye(g.num_nodes).to(device) - L_hat
 
-                x = A_hat.mm(x)
+                y_hat = A_hat.mm(x)
+                y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
+                edge_logits = self.decode_all(y_hat)
 
-                # edge_logits = self.decode_all(x)
-                edge_logits = self.decode_all(torch.nn.functional.normalize(x, p=2, dim=1))
-
-                sparsity_loss += -edge_logits.norm(p=1) / (g.num_nodes * g.num_nodes)
-                # sparsity_loss += edge_logits.var()
-                # deg = torch.diag(A.sum(dim=1).pow(-0.5))
-                # A_tilde = deg.mm(A).mm(deg)
-                # sparsity_loss += A.norm(p=1)/(g.num_nodes*g.num_nodes)
-
+                sparsity_loss += torch.relu(edge_logits - EDGE_LOGIT_THRESHOLD).norm(p=1) / edge_logits.numel()
                 # if self.edge_encoder:
                 #     weighted_edge_attr_tensor = A_hat.view(g.num_nodes, g.num_nodes, 1)*edge_attr_tensor
                 #     index = A_hat.nonzero().T[0]
                 #     y_hat = x.index_add(0, index, weighted_edge_attr_tensor[A_hat.nonzero().T[0], A_hat.nonzero().T[1]])
                 # else:
                 #     y_hat = x
-                y_hat = x
 
             embeddings[i] = y_hat.mean(dim=0)
             sparsity_loss /= data.num_graphs

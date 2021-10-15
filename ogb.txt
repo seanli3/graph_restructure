@@ -1,0 +1,10 @@
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
+--dataset=ogbg-molhiv --gnn=gin
