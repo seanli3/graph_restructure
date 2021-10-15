@@ -1,10 +1,12 @@
 import torch
 from numpy.random import seed as nseed
 import numpy as np
-from graph_dictionary.model import RewireNetNodeClassification
+from models.model import RewireNetNodeClassification
 from tqdm import tqdm
 import argparse
 from pathlib import Path
+from config import SAVED_MODEL_PATH_NODE_CLASSIFICATION
+from copy import deepcopy
 
 path = Path(__file__).parent
 
@@ -85,12 +87,10 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
                 eval_info_early_model['val_loss'] = val_loss
                 eval_info_early_model['epoch'] = epoch
                 eval_info_early_model['step'] = step
-                eval_info_early_model['C'] = torch.clone(model.C.detach())
-                # eval_info_early_model['W'] = torch.clone(model.W.detach())
-                # eval_info_early_model['A'] = torch.clone(model.A.detach())
+                eval_info_early_model['model'] = deepcopy(model.state_dict())
                 best_val_loss = val_loss
                 bad_counter = 0
-                torch.save(eval_info_early_model, path / './{}_best_model_split_{}.pt'.format(DATASET, split))
+                torch.save(eval_info_early_model, SAVED_MODEL_PATH_NODE_CLASSIFICATION.format(DATASET, split))
             else:
                 bad_counter += 1
                 if bad_counter == patience:

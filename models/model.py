@@ -120,6 +120,24 @@ class RewireNetNodeClassification(torch.nn.Module):
         # y_hat = torch.cat(y_hat, self.data.x)
         return self.compute_loss(y_hat, mask, C)
 
+    def decode_all(self, z):
+        return z @ z.t()
+
+    def transform_edges(self, dataset):
+        x = self.x
+        D = self.D
+        C = torch.nn.functional.normalize(self.C, dim=0, p=2)
+        L_hat = D.matmul(C).squeeze()
+        y_hat = (self.I - L_hat).mm(x)
+        A_prob = torch.sigmoid(self.decode_all(y_hat))
+        A = A_prob.where(A_prob > 0.5, torch.tensor(0., device=device))
+        index = A.nonzero().T
+        edge_index = index.detach()
+        # edge_weight = A[index[0], index[1]].detach()
+        dataset.data.edge_index = edge_index
+        # data.edge_weight = edge_weight
+        return dataset
+
 
 class RewireNetGraphClassification(torch.nn.Module):
     def __init__(self, dataset, step):

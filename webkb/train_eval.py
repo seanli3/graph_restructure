@@ -9,7 +9,7 @@ from torch.optim import Adam
 from sklearn.metrics import f1_score
 import numpy as np
 from tqdm import tqdm
-# from torch_sparse import spmm
+
 
 def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None, cuda=False):
     device = torch.device('cuda' if cuda else 'cpu')

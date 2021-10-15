@@ -2,8 +2,9 @@ import torch
 from tqdm import tqdm
 import math
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
+from config import OGB_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION, TU_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION
 from kernel.train_eval import k_fold
-from graph_dictionary.model import RewireNetGraphClassification
+from models.model import RewireNetGraphClassification
 from kernel.datasets import get_dataset
 from pathlib import Path
 import argparse
@@ -91,7 +92,7 @@ def train_tu(dataset, batch_size=128, epochs=200, lr=0.01, weight_decay=0.0005, 
         dataset._data_list = None
         rewirer_model = train_rewirer(dataset, RewireNetGraphClassification, train_indices[i], val_indices[i],
                                       test_indices[i], batch_size, epochs, lr, weight_decay, patience, step)
-        torch.save(rewirer_model, path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, i))
+        torch.save(rewirer_model, TU_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION.format(dataset.name, i))
 
 
 def train_ogb(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005, patience=10, step=0.1):
@@ -100,8 +101,7 @@ def train_ogb(dataset, batch_size=128, epochs=2000, lr=0.01, weight_decay=0.0005
     dataset._data_list = None
     rewirer_model = train_rewirer(dataset, RewireNetGraphClassification, train_indices, val_indices,
                                   test_indices, batch_size, epochs, lr, weight_decay, patience, step)
-    torch.save(rewirer_model,
-               path / '../kernel/saved_models/{}_dataset.pt'.format(dataset.name))
+    torch.save(rewirer_model, OGB_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION.format(dataset.name))
 
 
 # datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']# , 'COLLAB']

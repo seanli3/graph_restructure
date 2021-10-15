@@ -1,14 +1,13 @@
 import time
-
 import torch
 import torch.nn.functional as F
 from torch import tensor
 from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
+from config import SAVED_MODEL_PATH_GRAPH_CLASSIFICATION
 from kernel.diff_pool import DiffPool
-from graph_dictionary.model import RewireNetGraphClassification
-from graph_dictionary.utils import rewire_graph
+from models.model import RewireNetGraphClassification
 from pathlib import Path
 from kernel.datasets import get_dataset
 
@@ -16,6 +15,7 @@ from kernel.datasets import get_dataset
 path = Path(__file__).parent
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
 
 def cross_validation_with_val_set(dataset_name, Net, epochs, batch_size, lr,
                                   lr_decay_factor,lr_decay_step_size, weight_decay,
@@ -28,9 +28,8 @@ def cross_validation_with_val_set(dataset_name, Net, epochs, batch_size, lr,
                val_idx) in enumerate(zip(*k_fold(dataset, folds=folds))):
 
         if rewired:
-            rewirer_state = torch.load(path / '../kernel/saved_models/{}_dataset_split_{}.pt'.format(dataset.name, fold))
-            # step = rewirer_state['model']['step']
-            step = 0.1
+            rewirer_state = torch.load(SAVED_MODEL_PATH_GRAPH_CLASSIFICATION.format(dataset.name, fold))
+            step = rewirer_state['model']['step']
             rewirer = RewireNetGraphClassification(dataset, step)
             rewirer.load_state_dict(rewirer_state['model'])
             rewirer.eval()
