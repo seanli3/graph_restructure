@@ -1,5 +1,6 @@
 import math
 import os
+
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -8,15 +9,16 @@ from torch_geometric.utils import get_laplacian
 
 from config import EDGE_LOGIT_THRESHOLD
 from .utils import (
-    create_filter, check_symmetric, get_adjacency, get_class_idx, sample_negative_graphs, sample_positive_graphs,
-    sample_negative, ASTNodeEncoder,
+    create_filter, sample_negative_graphs, sample_positive_graphs, sample_positive_nodes_nce, ASTNodeEncoder,
+    sample_negative_nodes_nce, sample_negative_nodes_cont, sample_positive_nodes_cont, sample_positive_nodes_dict,
+    sample_negative_nodes_dict,
 )
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
 class RewireNetNodeClassification(torch.nn.Module):
-    def __init__(self, dataset, split, step):
+    def __init__(self, dataset, split, step, objective="npair_loss"):
         super(RewireNetNodeClassification, self).__init__()
         self.step = step
         data = dataset[0]
@@ -33,74 +35,201 @@ class RewireNetNodeClassification(torch.nn.Module):
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         self.L = torch.sparse_coo_tensor(L_index, L_weight, device=device).to_dense()
         self.D = create_filter(self.L, self.step).permute(1, 2, 0)
-        self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1, device=device))
+        # self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1, device=device))
+        self.windows = math.ceil(2.1/self.step)
+        self.mlp = torch.nn.Sequential(
+            torch.nn.Linear(self.windows, self.windows*2), torch.nn.ReLU(), torch.nn.Linear(self.windows*2, 1)
+            )
 
         self.A = None
-        self.loss = torch.nn.MSELoss()
         self.I = torch.eye(dataset[0].num_nodes, device=device)
+        self.K = 10
 
-        # sample negative examples
-        self.train_negative_samples = sample_negative(dataset.num_classes, self.train_mask, data.y)
-        self.val_negative_samples = sample_negative(dataset.num_classes, self.val_mask, data.y)
+        self.objective = objective.lower()
+        [self.train_positive_nodes, self.train_negative_nodes] = self.sample_nodes(self.train_mask)
+        [self.val_positive_nodes, self.val_negative_nodes] = self.sample_nodes(self.val_mask)
 
         # random Guassian signals for simulating spectral clustering
         # epsilon - error bound
         epsilon = 0.25
-        random_signal_size = math.floor(
-            6 / (math.pow(epsilon, 2) / 2 - math.pow(epsilon, 3) / 3) * math.log(self.data.num_nodes)
-        )
+        # random_signal_size = math.floor(
+        #     6 / (math.pow(epsilon, 2) / 2 - math.pow(epsilon, 3) / 3) * math.log(self.data.num_nodes)
+        # )
+        random_signal_size = self.data.num_features
         random_signal = torch.normal(
             0, math.sqrt(1 / random_signal_size), size=(self.data.num_nodes, random_signal_size), device=device
         )
 
         self.x = torch.cat([self.data.x, random_signal], dim=1)
 
+        self.W = torch.nn.Parameter(torch.empty(3, 1, device=device))
+
     def reset_parameters(self):
-        # self.W.weight = torch.nn.Parameter(get_adjacency(self.data.edge_index))
-        torch.nn.init.xavier_normal_(self.C, 0.6)
+        # torch.nn.init.xavier_normal_(self.C, 0.6)  # torch.nn.init.xavier_normal_(self.W)
+        torch.nn.init.xavier_normal_(self.W, 0.5)  # torch.nn.init.xavier_normal_(self.W)
+        for layer in self.mlp:
+            if hasattr(layer, 'reset_parameters'):
+                layer.reset_parameters()
 
-    def compute_loss(self, y_hat, mask, C):
-        homophily_loss_1 = 0
-        if self.training:
-            negative_samples = self.train_negative_samples
+    def sample_nodes(self, mask):
+        if self.objective == 'nce_loss':
+            positive_nodes = sample_positive_nodes_nce(mask, self.data.y)
+            negative_nodes = sample_negative_nodes_nce(mask, self.data.y, self.K)
+        elif self.objective in ['contrastive_loss', 'triplet_loss']:
+            positive_nodes = sample_positive_nodes_cont(mask, self.data.y, self.K)
+            negative_nodes = sample_negative_nodes_cont(mask, self.data.y, self.K)
+        elif self.objective == 'lifted_struct_loss':
+            positive_nodes = sample_positive_nodes_dict(mask, self.data.y, 5)
+            negative_nodes = sample_negative_nodes_dict(mask, self.data.y, 30)
+        elif self.objective == 'npair_loss':
+            positive_nodes = sample_positive_nodes_dict(mask, self.data.y, 1)
+            negative_nodes = sample_negative_nodes_dict(mask, self.data.y, 20)
         else:
-            negative_samples = self.val_negative_samples
+            positive_nodes = []
+            negative_nodes = []
+        return [positive_nodes, negative_nodes]
 
-        # homophily loss 1: distance between pairs in negative samples
-        for group in negative_samples:
-            # group embeddings by class
-            y_hat_group = y_hat[group]
-            # add mean of distance to loss
-            homophily_loss_1 -= torch.cdist(y_hat_group, y_hat_group).mean()
+    def nce_loss(self, x, mask):
+        x_masked = x[mask].view(-1, 1, x.shape[1])
 
-        # homophily loss 2: distance between pairs between pairs of the same class
-        homophily_loss_2 = 0
-        # iterate over classes
-        for i in range(self.dataset.num_classes):
-            # only calculate loss when we have samples for ths class
-            if ((self.data.y == i).logical_and(mask)).any():
-                # group embeddings by class
-                y_hat_group = y_hat[(self.data.y == i).logical_and(mask)]
-                # add mean of distance to loss
-                homophily_loss_2 += torch.cdist(
-                    y_hat_group, y_hat_group
-                ).mean()  # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
+        if self.training:
+            positive_nodes = self.train_positive_nodes
+            negative_nodes = self.train_negative_nodes
+        else:
+            positive_nodes = self.val_positive_nodes
+            negative_nodes = self.val_negative_nodes
 
+        x_positive = x[positive_nodes].view(-1, x.shape[1], 1)
+        x_negative = x[negative_nodes].permute(0, 2, 1)
+
+        nce_loss = -torch.mean(
+            torch.log(torch.sigmoid(x_masked.matmul(x_positive))).view(-1) + torch.log(
+                torch.sigmoid(-x_masked.matmul(x_negative))
+            ).sum(dim=2).view(-1)
+        )
+
+        return nce_loss
+
+    def contrastive_loss(self, x, mask):
+        x_masked = x[mask].view(-1, 1, x.shape[1])
+
+        if self.training:
+            positive_nodes = self.train_positive_nodes
+            negative_nodes = self.train_negative_nodes
+        else:
+            positive_nodes = self.val_positive_nodes
+            negative_nodes = self.val_negative_nodes
+
+        x_positive = x[positive_nodes]
+        x_negative = x[negative_nodes]
+        e = 0.8
+        loss = torch.frobenius_norm(x_masked - x_positive, dim=2).pow(2).sum(dim=1) + torch.max(
+            torch.zeros(1), e - torch.frobenius_norm(
+                x_masked - x_negative, dim=2
+            )
+        ).pow(2).sum(dim=1)
+        return loss.mean()
+
+    def triplet_loss(self, x, mask):
+        x_masked = x[mask].view(-1, 1, x.shape[1])
+        if self.training:
+            positive_nodes = self.train_positive_nodes
+            negative_nodes = self.train_negative_nodes
+        else:
+            positive_nodes = self.val_positive_nodes
+            negative_nodes = self.val_negative_nodes
+
+        x_positive = x[positive_nodes]
+        x_negative = x[negative_nodes]
+        e = 0.2
+        loss = torch.relu(
+            torch.frobenius_norm(x_masked - x_positive, dim=2).pow(2) - torch.frobenius_norm(
+                x_masked - x_negative, dim=2
+            ).pow(2) + e
+        )
+        return loss.mean()
+
+    def lifted_struct_loss(self, x, mask):
+        if self.training:
+            positive_nodes = self.train_positive_nodes
+            negative_nodes = self.train_negative_nodes
+        else:
+            positive_nodes = self.val_positive_nodes
+            negative_nodes = self.val_negative_nodes
+
+        e = 0.02
+
+        # https://lilianweng.github.io/lil-log/2021/05/31/contrastive-representation-learning.html#contrastive-loss
+        node_indices = mask.nonzero().view(-1)
+        x_masked = x[node_indices]
+        D_ij = torch.frobenius_norm(x_masked.view(-1, 1, x.shape[1]) - x_masked[positive_nodes], dim=2)
+        D_ik = torch.frobenius_norm(x_masked.view(-1, 1, x.shape[1]) - x_masked[negative_nodes], dim=2)
+        D_jl = torch.frobenius_norm(
+            x_masked[positive_nodes].view(positive_nodes.shape[0], positive_nodes.shape[1], 1, x.shape[1]) - x_masked[
+                negative_nodes[positive_nodes]], dim=3
+        )
+        loss = torch.mean(
+            torch.sum(
+                D_ij + torch.log(
+                    torch.exp(e - D_ik).sum(dim=1).view(-1, 1) + torch.exp(e - D_jl).sum(dim=2)
+                ), dim=1
+            )
+        )
+
+        return loss
+
+    def npair_loss(self, x, mask):
+        if self.training:
+            positive_nodes = self.train_positive_nodes
+            negative_nodes = self.train_negative_nodes
+        else:
+            positive_nodes = self.val_positive_nodes
+            negative_nodes = self.val_negative_nodes
+
+        # https://lilianweng.github.io/lil-log/2021/05/31/contrastive-representation-learning.html#contrastive-loss
+        node_indices = mask.nonzero().view(-1)
+        x_masked = x[node_indices]
+
+        loss = torch.log(
+            1 + torch.exp(
+                torch.tanh(x_masked.view(x_masked.shape[0], 1, x_masked.shape[1]).matmul(x_masked[negative_nodes].permute(0, 2, 1)))-\
+                torch.tanh(x_masked.view(x_masked.shape[0], 1, x_masked.shape[1]).matmul(x_masked[positive_nodes].permute(0, 2, 1))).mean(dim=2)
+            ).squeeze().sum(dim=1)
+        ).mean()
+
+        # l2_regularizer = x.norm(p=2, dim=1).mean()
+
+        # return loss + 0.001*l2_regularizer
+        return loss
+
+    def sparsity_loss(self):
+        # Normalize learnable coefficient C, is it necessary?
+        C = torch.nn.functional.normalize(self.C, dim=0, p=1)
         # sparsity loss?
         dimensions = torch.sqrt(torch.tensor(float(C.shape[0])))
         sparsity_loss = torch.mean((dimensions - C.norm(p=1, dim=0) / C.norm(p=2, dim=0)) / (dimensions - 1))
+        return sparsity_loss
 
+    def edge_weight_loss(self, x):
         # The Frobenius norm of L is added to control the distribution of the edge weights and is inspired by the approach in [27].
-        # edge_weight_loss = beta_e * torch.frobenius_norm(self.L, dim=1).pow(2).mean()
-        edge_weight_loss = 0
+        edge_weight_loss = torch.frobenius_norm(self.decode_all(x), dim=1).pow(2).mean()
+        return edge_weight_loss
 
-        '''
-            we have a lot more negative samples than positive ones,
-            divide homophily_loss_1 by beta (the average negative samples per class)
-        '''
-        beta = len(negative_samples) / self.dataset.num_classes
-
-        return sparsity_loss + edge_weight_loss + homophily_loss_2 + homophily_loss_1 / beta
+    def loss(self, x, mask):
+        if self.objective == 'nce_loss':
+            homo_loss = self.nce_loss(x, mask)
+        elif self.objective == 'contrastive_loss':
+            homo_loss = self.contrastive_loss(x, mask)
+        elif self.objective == 'triplet_loss':
+            homo_loss = self.triplet_loss(x, mask)
+        elif self.objective == 'lifted_struct_loss':
+            homo_loss = self.lifted_struct_loss(x, mask)
+        elif self.objective == 'npair_loss':
+            homo_loss = self.npair_loss(x, mask)
+        else:
+            homo_loss = 0
+        # return homo_loss + self.sparsity_loss() + self.edge_weight_loss(x)
+        return homo_loss
 
     '''
     I - L is a low-pass filter used by GCN, the loss function 
@@ -108,41 +237,54 @@ class RewireNetNodeClassification(torch.nn.Module):
     this low-pass filter
     '''
 
-    def forward(self, mask):
+    def forward(self):
         x = self.x
         # Normalize learnable coefficient C, is it necessary?
-        C = torch.nn.functional.normalize(self.C, dim=0, p=2)
+        # C = torch.nn.functional.normalize(self.C, dim=0, p=2)
+        # C = torch.nn.functional.normalize(self.C, dim=0, p=1)
+        # C = torch.relu(self.C)
+        # C = self.C
         # Construct a filtered laplacian by sum over all filter banks with C
-        L_hat = self.D.matmul(C).squeeze()
+        # L_hat = self.D.matmul(C).squeeze()
+        L_hat = self.mlp(self.D.view(self.data.num_nodes*self.data.num_nodes, -1)).squeeze()
+        L_hat = L_hat.view(self.data.num_nodes, self.data.num_nodes)
 
         # I - L low-pass filter
         y_hat = (self.I - L_hat).mm(x)
 
-        y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
-        edge_logits = self.decode_all(y_hat)
-        sparsity_loss = torch.relu(edge_logits - EDGE_LOGIT_THRESHOLD).norm(p=1)/edge_logits.numel()
-        # concatenate filtered feature with original node feature?
-        # y_hat = torch.cat(y_hat, self.data.x)
-        return self.compute_loss(y_hat, mask, C) + sparsity_loss
+        y_hat = torch.cat((y_hat.view(self.data.num_nodes, self.data.num_features, 2), self.data.x.view(x.shape[0], -1, 1)), dim=2)
+        y_hat = y_hat.matmul(self.W).squeeze()
+
+        # return torch.nn.functional.normalize(y_hat, p=2, dim=1)
+        # return y_hat.mm(self.W)
+        return y_hat
 
     def decode_all(self, z):
         return z @ z.t()
 
     def transform_edges(self, dataset):
-        x = self.x
-        D = self.D
-        C = torch.nn.functional.normalize(self.C, dim=0, p=2)
-        L_hat = D.matmul(C).squeeze()
-        y_hat = (self.I - L_hat).mm(x)
-        y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
-        edge_logits = self.decode_all(y_hat)
+        y_hat = self()
+        with torch.no_grad():
+            if self.objective == 'nce_loss':
+                dataset.data.edge_index = self.get_edges_cosin(y_hat)
+            elif self.objective in ['contrastive_loss', 'lifted_struct_loss']:
+                dataset.data.edge_index = self.get_edges_pdist(y_hat)
+        return dataset
+
+    def get_edges_cosin(self, x):
+        edge_logits = self.decode_all(x)
         A = edge_logits.where(edge_logits > EDGE_LOGIT_THRESHOLD, torch.tensor(0., device=device))
         index = A.nonzero().T
-        edge_index = index.detach()
-        # edge_weight = A[index[0], index[1]].detach()
-        dataset.data.edge_index = edge_index
-        # data.edge_weight = edge_weight
-        return dataset
+        return index.detach()
+
+    def get_edges_pdist(self, x):
+        dist = torch.nn.functional.pdist(x, p=2)
+        e = 0.05
+        indices = (dist < e).nonzero().view(-1)
+        num_nodes = x.shape[0]
+        rows = indices // num_nodes
+        cols = indices % num_nodes
+        return torch.stack((torch.cat((rows, cols)), torch.cat((cols, rows))), dim=0).detach()
 
 
 class RewireNetGraphClassification(torch.nn.Module):
@@ -152,7 +294,9 @@ class RewireNetGraphClassification(torch.nn.Module):
         self.num_classes = dataset.num_classes
         self.step = step
         # self.windows = math.ceil(2.1/self.step)
-        # self.mlp = torch.nn.Sequential(torch.nn.Linear(self.windows, 2*self.windows), torch.nn.ReLU(), torch.nn.Linear(2*self.windows, 1))
+        # self.mlp = torch.nn.Sequential(
+        #     torch.nn.Linear(11, 44), torch.nn.ReLU(), torch.nn.Linear(44, 1), torch.nn.ReLU(), torch.nn.Linear(11, 1)
+        #     )
         self.emb_dim = dataset[0].num_features
         self.node_encoder = None
         self.edge_encoder = None
@@ -172,7 +316,7 @@ class RewireNetGraphClassification(torch.nn.Module):
             self.node_encoder = ASTNodeEncoder(
                 self.emb_dim, num_nodetypes=len(nodetypes_mapping['type']),
                 num_nodeattributes=len(nodeattributes_mapping['attr']), max_depth=20
-                )
+            )
 
         self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1))
 
@@ -183,12 +327,13 @@ class RewireNetGraphClassification(torch.nn.Module):
             6 / (math.pow(self.epsilon, 2) / 2 - math.pow(self.epsilon, 3) / 3) * math.log(avg_num_nodes)
         )
 
-
     def reset_parameters(self):
         torch.nn.init.xavier_normal_(
             self.C, 0.6
-            )
-        # for layer in self.mlp:  #     if hasattr(layer, 'reset_parameters'):  #         layer.reset_parameters()
+        )
+        # for layer in self.mlp:
+        #     if hasattr(layer, 'reset_parameters'):
+        #         layer.reset_parameters()
 
     def compute_loss(self, embeddings, negative_samples, positive_samples):
         # first part of homophily loss: graph embeddings from different groups should be far-apart
@@ -206,11 +351,11 @@ class RewireNetGraphClassification(torch.nn.Module):
             for group in class_group:
                 homophily_loss_2 += torch.cdist(
                     embeddings[[group]], embeddings[[group]]
-                    ).mean()  # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
+                ).mean()  # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
 
         # sparsity loss? what's this?
         dimensions = torch.sqrt(torch.tensor(float(self.C.shape[0])))
-        sparsity_loss = torch.mean((dimensions - self.C.norm(p=1, dim=0)/self.C.norm(p=2, dim=0))/(dimensions - 1))
+        sparsity_loss = torch.mean((dimensions - self.C.norm(p=1, dim=0) / self.C.norm(p=2, dim=0)) / (dimensions - 1))
 
         return sparsity_loss + homophily_loss_2 + homophily_loss_1
 
@@ -294,13 +439,9 @@ class RewireNetGraphClassification(torch.nn.Module):
                 y_hat = torch.nn.functional.normalize(y_hat, p=2, dim=1)
                 edge_logits = self.decode_all(y_hat)
 
-                sparsity_loss += torch.relu(edge_logits - EDGE_LOGIT_THRESHOLD).norm(p=1) / edge_logits.numel()
-                # if self.edge_encoder:
-                #     weighted_edge_attr_tensor = A_hat.view(g.num_nodes, g.num_nodes, 1)*edge_attr_tensor
-                #     index = A_hat.nonzero().T[0]
-                #     y_hat = x.index_add(0, index, weighted_edge_attr_tensor[A_hat.nonzero().T[0], A_hat.nonzero().T[1]])
-                # else:
-                #     y_hat = x
+                sparsity_loss += torch.relu(edge_logits - EDGE_LOGIT_THRESHOLD).norm(
+                    p=1
+                ) / edge_logits.numel()  # if self.edge_encoder:  #     weighted_edge_attr_tensor = A_hat.view(g.num_nodes, g.num_nodes, 1)*edge_attr_tensor  #     index = A_hat.nonzero().T[0]  #     y_hat = x.index_add(0, index, weighted_edge_attr_tensor[A_hat.nonzero().T[0], A_hat.nonzero().T[1]])  # else:  #     y_hat = x
 
             embeddings[i] = y_hat.mean(dim=0)
             sparsity_loss /= data.num_graphs

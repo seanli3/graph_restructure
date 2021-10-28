@@ -56,9 +56,10 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
         for epoch in pbar:
             model.train()
             # Predict and calculate loss for user factor and bias
-            optimizer = torch.optim.Adam([model.C], lr=lr,
+            optimizer = torch.optim.Adam(model.parameters(), lr=lr,
                                         weight_decay=weight_decay)  # learning rate
-            loss = model(model.train_mask)
+            x_hat = model()
+            loss = model.loss(x_hat, model.train_mask)
             # Backpropagate
             loss.backward()
             # Update the parameters
@@ -78,7 +79,8 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
 
             model.eval()
             with torch.no_grad():
-                val_loss = model(model.val_mask)
+                x_hat = model()
+                val_loss = model.loss(x_hat, model.val_mask)
             pbar.set_description('Epoch: {}, training loss: {:.2f}, validation loss: {:.2f}'.format(epoch, loss.item(), val_loss.item()))
 
 
@@ -102,7 +104,7 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
     return eval_info_early_model
 
 
-eval_info_early_model = run(DATASET, RewireNetNodeClassification, 2000, args.lr, 0.0005, 100, args.step)
+eval_info_early_model = run(DATASET, RewireNetNodeClassification, 20000, args.lr, 0.0005, 100, args.step)
 
 
 print()

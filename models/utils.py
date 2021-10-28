@@ -1,7 +1,8 @@
-import numpy as np
-import torch
 import math
 from itertools import product
+
+import numpy as np
+import torch
 from numpy.random import seed as nseed
 from torch_geometric.utils import get_laplacian
 
@@ -27,10 +28,9 @@ class ASTNodeEncoder(torch.nn.Module):
         self.attribute_encoder = torch.nn.Embedding(num_nodeattributes, emb_dim)
         self.depth_encoder = torch.nn.Embedding(self.max_depth + 1, emb_dim)
 
-
     def forward(self, x, depth):
         depth[depth > self.max_depth] = self.max_depth
-        return self.type_encoder(x[:,0]) + self.attribute_encoder(x[:,1]) + self.depth_encoder(depth)
+        return self.type_encoder(x[:, 0]) + self.attribute_encoder(x[:, 1]) + self.depth_encoder(depth)
 
 
 def get_vocab_mapping(seq_list, num_vocab):
@@ -61,10 +61,10 @@ def get_vocab_mapping(seq_list, num_vocab):
                 vocab_list.append(w)
 
     cnt_list = np.array([vocab_cnt[w] for w in vocab_list])
-    topvocab = np.argsort(-cnt_list, kind = 'stable')[:num_vocab]
+    topvocab = np.argsort(-cnt_list, kind='stable')[:num_vocab]
 
     print('Coverage of top {} vocabulary:'.format(num_vocab))
-    print(float(np.sum(cnt_list[topvocab]))/np.sum(cnt_list))
+    print(float(np.sum(cnt_list[topvocab])) / np.sum(cnt_list))
 
     vocab2idx = {vocab_list[vocab_idx]: idx for idx, vocab_idx in enumerate(topvocab)}
     idx2vocab = [vocab_list[vocab_idx] for vocab_idx in topvocab]
@@ -81,11 +81,11 @@ def get_vocab_mapping(seq_list, num_vocab):
 
     # test the correspondence between vocab2idx and idx2vocab
     for idx, vocab in enumerate(idx2vocab):
-        assert(idx == vocab2idx[vocab])
+        assert (idx == vocab2idx[vocab])
 
     # test that the idx of '__EOS__' is len(idx2vocab) - 1.
     # This fact will be used in decode_arr_to_seq, when finding __EOS__
-    assert(vocab2idx['__EOS__'] == len(idx2vocab) - 1)
+    assert (vocab2idx['__EOS__'] == len(idx2vocab) - 1)
 
     return vocab2idx, idx2vocab
 
@@ -107,9 +107,10 @@ def augment_edge(data):
     edge_attr_ast = torch.zeros((edge_index_ast.size(1), 2))
 
     ##### Inverse AST edge
-    edge_index_ast_inverse = torch.stack([edge_index_ast[1], edge_index_ast[0]], dim = 0)
-    edge_attr_ast_inverse = torch.cat([torch.zeros(edge_index_ast_inverse.size(1), 1), torch.ones(edge_index_ast_inverse.size(1), 1)], dim = 1)
-
+    edge_index_ast_inverse = torch.stack([edge_index_ast[1], edge_index_ast[0]], dim=0)
+    edge_attr_ast_inverse = torch.cat(
+        [torch.zeros(edge_index_ast_inverse.size(1), 1), torch.ones(edge_index_ast_inverse.size(1), 1)], dim=1
+    )
 
     ##### Next-token edge
 
@@ -118,7 +119,7 @@ def augment_edge(data):
     # attributed_node_idx_in_dfs_order = attributed_node_idx[torch.argsort(data.node_dfs_order[attributed_node_idx].view(-1,))]
 
     ## Since the nodes are already sorted in dfs ordering in our case, we can just do the following.
-    attributed_node_idx_in_dfs_order = torch.where(data.node_is_attributed.view(-1,) == 1)[0]
+    attributed_node_idx_in_dfs_order = torch.where(data.node_is_attributed.view(-1, ) == 1)[0]
 
     ## build next token edge
     # Given: attributed_node_idx_in_dfs_order
@@ -126,17 +127,23 @@ def augment_edge(data):
     # Output:
     #    [[1, 3, 4, 5, 8, 9]
     #     [3, 4, 5, 8, 9, 12]
-    edge_index_nextoken = torch.stack([attributed_node_idx_in_dfs_order[:-1], attributed_node_idx_in_dfs_order[1:]], dim = 0)
-    edge_attr_nextoken = torch.cat([torch.ones(edge_index_nextoken.size(1), 1), torch.zeros(edge_index_nextoken.size(1), 1)], dim = 1)
-
+    edge_index_nextoken = torch.stack(
+        [attributed_node_idx_in_dfs_order[:-1], attributed_node_idx_in_dfs_order[1:]], dim=0
+    )
+    edge_attr_nextoken = torch.cat(
+        [torch.ones(edge_index_nextoken.size(1), 1), torch.zeros(edge_index_nextoken.size(1), 1)], dim=1
+    )
 
     ##### Inverse next-token edge
-    edge_index_nextoken_inverse = torch.stack([edge_index_nextoken[1], edge_index_nextoken[0]], dim = 0)
+    edge_index_nextoken_inverse = torch.stack([edge_index_nextoken[1], edge_index_nextoken[0]], dim=0)
     edge_attr_nextoken_inverse = torch.ones((edge_index_nextoken.size(1), 2))
 
-
-    data.edge_index = torch.cat([edge_index_ast, edge_index_ast_inverse, edge_index_nextoken, edge_index_nextoken_inverse], dim = 1)
-    data.edge_attr = torch.cat([edge_attr_ast,   edge_attr_ast_inverse, edge_attr_nextoken,  edge_attr_nextoken_inverse], dim = 0)
+    data.edge_index = torch.cat(
+        [edge_index_ast, edge_index_ast_inverse, edge_index_nextoken, edge_index_nextoken_inverse], dim=1
+    )
+    data.edge_attr = torch.cat(
+        [edge_attr_ast, edge_attr_ast_inverse, edge_attr_nextoken, edge_attr_nextoken_inverse], dim=0
+    )
 
     return data
 
@@ -150,7 +157,7 @@ def encode_y_to_arr(data, vocab2idx, max_seq_len):
 
     # PyG >= 1.5.0
     seq = data.y
-    
+
     # PyG = 1.4.3
     # seq = data.y[0]
 
@@ -167,7 +174,9 @@ def encode_seq_to_arr(seq, vocab2idx, max_seq_len):
     '''
 
     augmented_seq = seq[:max_seq_len] + ['__EOS__'] * max(0, max_seq_len - len(seq))
-    return torch.tensor([[vocab2idx[w] if w in vocab2idx else vocab2idx['__UNK__'] for w in augmented_seq]], dtype = torch.long)
+    return torch.tensor(
+        [[vocab2idx[w] if w in vocab2idx else vocab2idx['__UNK__'] for w in augmented_seq]], dtype=torch.long
+    )
 
 
 def decode_arr_to_seq(arr, idx2vocab):
@@ -176,10 +185,11 @@ def decode_arr_to_seq(arr, idx2vocab):
         Output: a sequence of words.
     '''
 
-
-    eos_idx_list = torch.nonzero(arr == len(idx2vocab) - 1, as_tuple=False) # find the position of __EOS__ (the last vocab in idx2vocab)
+    eos_idx_list = torch.nonzero(
+        arr == len(idx2vocab) - 1, as_tuple=False
+    )  # find the position of __EOS__ (the last vocab in idx2vocab)
     if len(eos_idx_list) > 0:
-        clippted_arr = arr[: torch.min(eos_idx_list)] # find the smallest __EOS__
+        clippted_arr = arr[: torch.min(eos_idx_list)]  # find the smallest __EOS__
     else:
         clippted_arr = arr
 
@@ -187,20 +197,20 @@ def decode_arr_to_seq(arr, idx2vocab):
 
 
 def test():
-    seq_list = [['a', 'b'], ['a', 'b', 'c', 'df', 'f', '2edea', 'a'], ['eraea', 'a', 'c'], ['d'], ['4rq4f','f','a','a', 'g']]
+    seq_list = [['a', 'b'], ['a', 'b', 'c', 'df', 'f', '2edea', 'a'], ['eraea', 'a', 'c'], ['d'],
+                ['4rq4f', 'f', 'a', 'a', 'g']]
     vocab2idx, idx2vocab = get_vocab_mapping(seq_list, 4)
     print(vocab2idx)
     print(idx2vocab)
     print()
-    assert(len(vocab2idx) == len(idx2vocab))
+    assert (len(vocab2idx) == len(idx2vocab))
 
     for vocab, idx in vocab2idx.items():
-        assert(idx2vocab[idx] == vocab)
-
+        assert (idx2vocab[idx] == vocab)
 
     for seq in seq_list:
         print(seq)
-        arr = encode_seq_to_arr(seq, vocab2idx, max_seq_len = 4)[0]
+        arr = encode_seq_to_arr(seq, vocab2idx, max_seq_len=4)[0]
         # Test the effect of predicting __EOS__
         # arr[2] = vocab2idx['__EOS__']
         print(arr)
@@ -212,9 +222,12 @@ def test():
 
 
 def create_filter(laplacian, step):
-    part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1/step - 1))
-    part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(0, 2.1, step, device=device).view(
-        -1, 1, 1)).matrix_power(4)
+    part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))
+    part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(
+        0, 2.1, step, device=device
+    ).view(
+        -1, 1, 1
+    )).matrix_power(4)
     part3 = torch.eye(laplacian.shape[0], device=device)
     return (part1.matmul(part2) + part3).matrix_power(-2)
 
@@ -237,7 +250,8 @@ def symmetric(X):
 
 def get_class_idx(num_classes, idx, y):
     y = y if len(y.shape) > 1 else y.view(-1, 1)
-    class_idx = ( [ (y[:, j].view(-1) == i).nonzero().view(-1).tolist() for i in range(num_classes) ] for j in range(y.shape[1]) )
+    class_idx = ([(y[:, j].view(-1) == i).nonzero().view(-1).tolist() for i in range(num_classes)] for j in
+                 range(y.shape[1]))
     class_idx = [[list(set(i).intersection(set(idx.tolist()))) for i in class_i] for class_i in class_idx]
     class_idx = filter(lambda class_i: len(class_i[0]) != 0 and len(class_i[1]) != 0, class_idx)
     return list(class_idx)
@@ -250,6 +264,76 @@ def sample_negative_graphs(num_classes, idx, y):
 
 def sample_positive_graphs(num_classes, idx, y):
     return get_class_idx(num_classes, idx, y)
+
+
+def sample_positive_nodes_nce(mask, y):
+    positive_samples = []
+    for idx in mask.nonzero().view(-1):
+        positive_mask = mask.logical_and(y == y[idx])
+        if positive_mask.count_nonzero() > 1:
+            positive_mask[idx] = False
+        positive_indices = positive_mask.nonzero().view(-1)
+        n = np.random.choice(positive_indices.cpu())
+        positive_samples.append(n)
+    return torch.tensor(positive_samples, device=device)
+
+
+def sample_negative_nodes_nce(mask, y, K):
+    negative_samples = []
+    for idx in mask.nonzero().view(-1):
+        negative_mask = mask.logical_and(y != y[idx])
+        negative_indices = negative_mask.nonzero().view(-1)
+        n = np.random.choice(negative_indices.cpu(), K)
+        negative_samples.append(n)
+    return torch.tensor(negative_samples, device=device)
+
+
+def sample_positive_nodes_cont(mask, y, K):
+    positive_samples = []
+    for idx in mask.nonzero().view(-1):
+        positive_mask = mask.logical_and(y == y[idx])
+        if positive_mask.count_nonzero() > 1:
+            positive_mask[idx] = False
+        positive_indices = positive_mask.nonzero().view(-1)
+        n = np.random.choice(positive_indices.cpu(), K)
+        positive_samples.append(n)
+    return torch.tensor(positive_samples, device=device)
+
+
+def sample_negative_nodes_cont(mask, y, K):
+    negative_samples = []
+    for idx in mask.nonzero().view(-1):
+        negative_mask = mask.logical_and(y != y[idx])
+        negative_indices = negative_mask.nonzero().view(-1)
+        n = np.random.choice(negative_indices.cpu(), K)
+        negative_samples.append(n)
+    return torch.tensor(negative_samples, device=device)
+
+
+# Warning: this method returns indices from the masked list, not the original list
+def sample_positive_nodes_dict(mask, y, K):
+    positive_samples = []
+    masked_y = torch.masked_select(y, mask)
+    for masked_idx in range(mask.count_nonzero()):
+        positive_mask = masked_y == masked_y[masked_idx]
+        if positive_mask.count_nonzero() > 1:
+            positive_mask[masked_idx] = False
+        positive_indices = positive_mask.nonzero().view(-1)
+        n = np.random.choice(positive_indices.cpu(), K)
+        positive_samples.append(n)
+    return torch.tensor(positive_samples, device=device)
+
+
+# Warning: this method returns indices from the masked list, not the original list
+def sample_negative_nodes_dict(mask, y, K):
+    negative_samples = []
+    masked_y = torch.masked_select(y, mask)
+    for masked_idx in range(mask.count_nonzero()):
+        negative_mask = masked_y != masked_y[masked_idx]
+        negative_indices = negative_mask.nonzero().view(-1)
+        n = np.random.choice(negative_indices.cpu(), K)
+        negative_samples.append(n)
+    return torch.tensor(negative_samples, device=device)
 
 
 def sample_negative(num_classes, mask, y):
@@ -276,7 +360,7 @@ def sample_negative(num_classes, mask, y):
 
 def rewire_graph(model, dataset, keep_num_edges=False, threshold=None):
     C = model['C']
-    step = 2.1/C.shape[0]
+    step = 2.1 / C.shape[0]
 
     dictionary = {}
     for i in range(len(dataset)):
