@@ -5,7 +5,7 @@ import time
 import torch
 import torch.nn.functional as F
 from torch import tensor
-from torch.optim import Adam
+from torch.optim import AdamW
 from sklearn.metrics import f1_score
 import numpy as np
 from tqdm import tqdm
@@ -27,7 +27,7 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
 
             model = Model(dataset)
             model.to(device).reset_parameters()
-            optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+            optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
             t_start = time.perf_counter()
 
             best_val_loss = float('inf')

@@ -4,9 +4,8 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from random import seed as rseed
 from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian
-from graph_dictionary.utils import create_filter
 from pathlib import Path
+from models.encoder_node_classification import Rewirer
 
 from citation import get_dataset, random_planetoid_splits, run, random_coauthor_amazon_splits
 
@@ -14,21 +13,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
 parser.add_argument('--random_splits', type=bool, default=False)
 parser.add_argument('--runs', type=int, default=1)
-parser.add_argument('--dummy_nodes', type=int, default=0)
-parser.add_argument('--removal_nodes', type=int, default=0)
 parser.add_argument('--epochs', type=int, default=2000)
 parser.add_argument('--seed', type=int, default=729, help='Random seed.')
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--weight_decay', type=float, default=0.0005)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--lcc', type=bool, default=False)
-parser.add_argument('--hidden', type=int, default=128)
-parser.add_argument('--dropout', type=float, default=0.9)
+parser.add_argument('--hidden', type=int, default=64)
+parser.add_argument('--dropout', type=float, default=0.5)
 parser.add_argument('--normalize_features', type=bool, default=True)
-parser.add_argument('--edge_dropout', type=float, default=0)
-parser.add_argument('--node_feature_dropout', type=float, default=0)
 parser.add_argument('--cuda', action='store_true')
-parser.add_argument('--dissimilar_t', type=float, default=1)
+parser.add_argument('--rewired', action='store_true')
 args = parser.parse_args()
 
 
@@ -76,49 +71,19 @@ elif args.dataset == "Computers" or args.dataset == "Photo":
 
 
 def use_dataset():
-    saved = torch.load(path / '../graph_dictionary/{}_best_model_split_0.pt'.format(args.dataset))
-    C = saved['C']
-    # C = torch.nn.functional.normalize(C, dim=0, p=1)
-    C = torch.nn.functional.normalize(C, dim=0, p=2)
-    step = saved['step']
+    dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc)
+    if args.rewired:
+        # rewirer_state = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION.format(args.dataset, split))
+        # step = rewirer_state['step']
+        # rewirer = RewireNetNodeClassification(dataset, split, step)
+        # rewirer.load_state_dict(rewirer_state['model'])
+        rewirer = Rewirer(dataset[0], DATASET=args.dataset)
+        rewirer.load()
+        new_dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc,
+                                  transform=rewirer.rewire)
+    else:
+        new_dataset = dataset
+    return new_dataset
 
-    dataset = get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
-               permute_masks=None, cuda=args.cuda, lcc=args.lcc,
-               node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t)
-    data = dataset[0]
-    L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
-    laplacian = torch.sparse_coo_tensor(L_index, L_weight, device=device).to_dense()
-    D = create_filter(laplacian, step).permute(1,2,0)
-    L = D.matmul(C).squeeze()
-
-    A_hat = torch.eye(L.shape[0], device=device) - L
-    A_hat = torch.nn.functional.normalize(A_hat, dim=1, p=2)
-
-    # sparsify edges
-    k = 8
-    A_one_zero = torch.zeros(A_hat.shape[0], A_hat.shape[1], device=device) \
-        .index_put((torch.arange(A_hat.shape[0], device=device).repeat_interleave(k), A_hat.topk(k, dim=1, largest=True)[1].view(-1)), torch.tensor(1., device=device))
-    # A_one_zero = torch.ones(dataset.data.num_nodes, dataset.data.num_nodes, device=device)
-    # A_one_zero.masked_fill_(A_hat.abs() < 0.2, 0)
-    A_one_zero.masked_fill_(A_hat.abs() < 0.001, 0)
-
-    # v, i = torch.topk(A_hat.flatten(), k*A_hat.shape[0])
-    # edge_index = torch.tensor(np.array(np.unravel_index(i.cpu().numpy(), A_hat.shape)).T).T
-    # A_one_zero = torch.sparse_coo_tensor(edge_index, torch.ones(dataset[0].num_edges)).to_dense()
-    
-    # A_hat.masked_fill_(A_hat.abs() < 0.01, 0)
-    # edge_index = A_hat.nonzero(as_tuple=False).T
-    # edge_weight = A_hat[A_hat > 0]
-
-    # L = laplacian.abs() > 0.05
-    A = torch.sparse_coo_tensor(data.edge_index, torch.ones(dataset[0].num_edges), device=device).to_dense()
-
-    edges_to_add = (A_one_zero != 0).logical_and((A == 0)).nonzero()
-    edges_to_remove = (A != 0).logical_and((A_one_zero == 0)).nonzero()
-
-    return get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
-            permute_masks=None, lcc=args.lcc, edges_to_remove=edges_to_remove, edges_to_add=edges_to_add,
-            node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t,
-            dummy_nodes = args.dummy_nodes, removal_nodes = args.removal_nodes, cuda=args.cuda)
 
 run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, cuda=args.cuda)

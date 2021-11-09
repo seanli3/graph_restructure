@@ -6,6 +6,7 @@ from random import seed as rseed
 from numpy.random import seed as nseed
 from pathlib import Path
 from config import SAVED_MODEL_PATH_NODE_CLASSIFICATION
+from models.encoder_node_classification import Rewirer
 from webkb import get_dataset, run
 from models.model import RewireNetNodeClassification
 
@@ -22,7 +23,7 @@ parser.add_argument('--weight_decay', type=float, default=0.0005)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--lcc', type=bool, default=False)
 parser.add_argument('--hidden', type=int, default=64)
-parser.add_argument('--dropout', type=float, default=0.5)
+parser.add_argument('--dropout', type=float, default=0.9)
 parser.add_argument('--normalize_features', type=bool, default=True)
 parser.add_argument('--cuda', action='store_true')
 parser.add_argument('--rewired', action='store_true')
@@ -66,12 +67,14 @@ class Net(torch.nn.Module):
 def use_dataset(split):
     dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc)
     if args.rewired:
-        rewirer_state = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION.format(args.dataset, split))
-        step = rewirer_state['step']
-        rewirer = RewireNetNodeClassification(dataset, split, step)
-        rewirer.load_state_dict(rewirer_state['model'])
+        # rewirer_state = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION.format(args.dataset, split))
+        # step = rewirer_state['step']
+        # rewirer = RewireNetNodeClassification(dataset, split, step)
+        # rewirer.load_state_dict(rewirer_state['model'])
+        rewirer = Rewirer(dataset[0], DATASET=args.dataset)
+        rewirer.load()
         new_dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc,
-                                  transform=rewirer.transform_edges)
+                                  transform=rewirer.rewire)
     else:
         new_dataset = dataset
     return new_dataset

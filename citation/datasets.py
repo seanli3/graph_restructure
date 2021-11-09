@@ -10,8 +10,6 @@ import torch
 import networkx as nx
 from scipy.sparse import coo_matrix
 import numpy as np
-from .nell import Nell
-from .iris_data import Iris
 
 
 def matching_labels_distribution(dataset):
@@ -128,11 +126,6 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
         dataset = Flickr(path)
     elif name in ['Yelp']:
         dataset = Yelp(path)
-    elif name in ['nell.0.1', 'nell.0.01', 'nell.0.001']:
-        path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', 'Nell')
-        dataset = Nell(path, 'Nell', name)
-    elif name.lower() == 'iris':
-        dataset = Iris()
 
     # # Removing high-degree nodes
     # print('remove nodes:', removal_nodes)
@@ -193,12 +186,8 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
     #     # plt.clf()
 
 
-    if transform is not None and normalize_features:
-        dataset.transform = T.Compose([T.NormalizeFeatures(), transform])
-    elif normalize_features:
+    if normalize_features:
         dataset.transform = T.NormalizeFeatures()
-    elif transform is not None:
-        dataset.transform = transform
 
     if self_loop:
         dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]
@@ -274,6 +263,9 @@ def get_dataset(name, normalize_features=False, transform=None, edge_dropout=Non
     dataset.data, dataset.slices = dataset.collate([dataset.data])
     if hasattr(dataset, '_data_list'):
         del dataset._data_list
+
+    if transform:
+        dataset = transform(dataset)
 
     if cuda:
         dataset.data.to('cuda')

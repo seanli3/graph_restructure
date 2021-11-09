@@ -11,14 +11,14 @@ from config import EDGE_LOGIT_THRESHOLD
 from .utils import (
     create_filter, sample_negative_graphs, sample_positive_graphs, sample_positive_nodes_nce, ASTNodeEncoder,
     sample_negative_nodes_nce, sample_negative_nodes_cont, sample_positive_nodes_cont, sample_positive_nodes_dict,
-    sample_negative_nodes_dict,
+    sample_negative_nodes_dict, sample_positive_nodes_naive, sample_negative_nodes_naive, sample_positive_nodes_naive_2, sample_negative_nodes_naive_2
 )
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
 class RewireNetNodeClassification(torch.nn.Module):
-    def __init__(self, dataset, split, step, objective="npair_loss"):
+    def __init__(self, dataset, split, step, objective="naive_loss"):
         super(RewireNetNodeClassification, self).__init__()
         self.step = step
         data = dataset[0]
@@ -35,11 +35,6 @@ class RewireNetNodeClassification(torch.nn.Module):
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         self.L = torch.sparse_coo_tensor(L_index, L_weight, device=device).to_dense()
         self.D = create_filter(self.L, self.step).permute(1, 2, 0)
-        # self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1, device=device))
-        self.windows = math.ceil(2.1/self.step)
-        self.mlp = torch.nn.Sequential(
-            torch.nn.Linear(self.windows, self.windows*2), torch.nn.ReLU(), torch.nn.Linear(self.windows*2, 1)
-            )
 
         self.A = None
         self.I = torch.eye(dataset[0].num_nodes, device=device)
@@ -60,16 +55,35 @@ class RewireNetNodeClassification(torch.nn.Module):
             0, math.sqrt(1 / random_signal_size), size=(self.data.num_nodes, random_signal_size), device=device
         )
 
-        self.x = torch.cat([self.data.x, random_signal], dim=1)
+        self.x = self.data.x
+        self.random_signal = random_signal
 
-        self.W = torch.nn.Parameter(torch.empty(3, 1, device=device))
+        # self.C = torch.nn.Parameter(torch.empty(len(torch.arange(0, 2.1, self.step)), 1, device=device))
+        self.windows = math.ceil(2.1/self.step)
+        self.spectral_mlp = torch.nn.ModuleList([torch.nn.Sequential(
+            torch.nn.Linear(self.windows, self.windows*2), torch.nn.ReLU(),
+            torch.nn.Linear(self.windows*2, 1),
+        ) for _ in range(2)])
+        self.feature_mlp = torch.nn.ModuleList([
+            torch.nn.Sequential(
+                torch.nn.Linear(self.data.num_features, 128), torch.nn.ReLU(),
+                torch.nn.Linear(128, 64), ) for _ in range(3)
+        ])
+
+        self.final_mlp = torch.nn.Linear(64*3, self.dataset.num_classes, bias=False)
 
     def reset_parameters(self):
         # torch.nn.init.xavier_normal_(self.C, 0.6)  # torch.nn.init.xavier_normal_(self.W)
-        torch.nn.init.xavier_normal_(self.W, 0.5)  # torch.nn.init.xavier_normal_(self.W)
-        for layer in self.mlp:
-            if hasattr(layer, 'reset_parameters'):
-                layer.reset_parameters()
+        # torch.nn.init.xavier_normal_(self.W, 0.5)  # torch.nn.init.xavier_normal_(self.W)
+        for mlp in self.feature_mlp:
+            for layer in mlp:
+                if hasattr(layer, 'reset_parameters'):
+                    layer.reset_parameters()
+
+        for mlp in self.spectral_mlp:
+            for layer in mlp:
+                if hasattr(layer, 'reset_parameters'):
+                    layer.reset_parameters()
 
     def sample_nodes(self, mask):
         if self.objective == 'nce_loss':
@@ -82,16 +96,18 @@ class RewireNetNodeClassification(torch.nn.Module):
             positive_nodes = sample_positive_nodes_dict(mask, self.data.y, 5)
             negative_nodes = sample_negative_nodes_dict(mask, self.data.y, 30)
         elif self.objective == 'npair_loss':
-            positive_nodes = sample_positive_nodes_dict(mask, self.data.y, 1)
-            negative_nodes = sample_negative_nodes_dict(mask, self.data.y, 20)
+            positive_nodes = sample_positive_nodes_dict(mask, self.data.y, 5)
+            negative_nodes = sample_negative_nodes_dict(mask, self.data.y, 100)
+        elif self.objective == 'naive_loss':
+            positive_nodes = sample_positive_nodes_naive_2(mask, self.data.y)
+            negative_nodes = sample_negative_nodes_naive_2(mask, self.data.y)
         else:
             positive_nodes = []
             negative_nodes = []
         return [positive_nodes, negative_nodes]
 
     def nce_loss(self, x, mask):
-        x_masked = x[mask].view(-1, 1, x.shape[1])
-
+        x_masked = x[mask]
         if self.training:
             positive_nodes = self.train_positive_nodes
             negative_nodes = self.train_negative_nodes
@@ -188,19 +204,20 @@ class RewireNetNodeClassification(torch.nn.Module):
 
         # https://lilianweng.github.io/lil-log/2021/05/31/contrastive-representation-learning.html#contrastive-loss
         node_indices = mask.nonzero().view(-1)
+        x = torch.nn.functional.normalize(x, p=2, dim=1)
         x_masked = x[node_indices]
 
         loss = torch.log(
             1 + torch.exp(
-                torch.tanh(x_masked.view(x_masked.shape[0], 1, x_masked.shape[1]).matmul(x_masked[negative_nodes].permute(0, 2, 1)))-\
-                torch.tanh(x_masked.view(x_masked.shape[0], 1, x_masked.shape[1]).matmul(x_masked[positive_nodes].permute(0, 2, 1))).mean(dim=2)
+                x_masked.view(x_masked.shape[0], 1, x_masked.shape[1]).matmul(x_masked[negative_nodes].permute(0, 2, 1)) -
+                x_masked.view(x_masked.shape[0], 1, x_masked.shape[1]).matmul(x_masked[positive_nodes].permute(0, 2, 1)).mean(dim=2, keepdim=True)
             ).squeeze().sum(dim=1)
         ).mean()
 
-        # l2_regularizer = x.norm(p=2, dim=1).mean()
+        l2_regularizer = x.norm(p=2, dim=1).mean()
 
-        # return loss + 0.001*l2_regularizer
-        return loss
+        return loss + 0.001*l2_regularizer
+        # return loss
 
     def sparsity_loss(self):
         # Normalize learnable coefficient C, is it necessary?
@@ -215,6 +232,45 @@ class RewireNetNodeClassification(torch.nn.Module):
         edge_weight_loss = torch.frobenius_norm(self.decode_all(x), dim=1).pow(2).mean()
         return edge_weight_loss
 
+    def naive_loss(self, x, mask):
+        # masked_x = x[mask]
+        masked_x = x
+        e = 0.5
+        if self.training:
+            positive_nodes = self.train_positive_nodes
+            negative_nodes = self.train_negative_nodes
+        else:
+            positive_nodes = self.val_positive_nodes
+            negative_nodes = self.val_negative_nodes
+
+        # homophily loss 1: distance between pairs in negative samples
+        homophily_loss_1 = 0
+        for group in negative_nodes:
+            # group embeddings by class
+            x_group = masked_x[group]
+            # add mean of distance to loss
+            # homophily_loss_1 += torch.relu(e - torch.pdist(x_group)).mean()
+            homophily_loss_1 += e - torch.pdist(x_group).clamp(max=20).mean()
+
+        # homophily loss 2: distance between pairs between pairs of the same class
+        homophily_loss_2 = 0
+        # iterate over classes
+        for group in positive_nodes:
+            x_group = masked_x[group]
+            homophily_loss_2 += torch.pdist(x_group).clamp(max=20).mean()  # homophily_loss_2 += torch.var(y_hat_group, dim=0).mean()
+
+        '''
+            we have a lot more negative samples than positive ones,
+            divide homophily_loss_1 by beta (the average negative samples per class)
+        '''
+        # beta = len(negative_nodes) / self.dataset.num_classes
+        l2_loss = 0.01*sum([s.norm(p=2) for s in self.parameters()])
+        return homophily_loss_2/self.dataset.num_classes + homophily_loss_1/len(negative_nodes) + l2_loss
+
+    def e2e_loss(self, x, mask):
+        logits = F.log_softmax(self.final_mlp(x), dim=1)
+        return torch.nn.functional.nll_loss(logits[mask], self.data.y[mask])
+
     def loss(self, x, mask):
         if self.objective == 'nce_loss':
             homo_loss = self.nce_loss(x, mask)
@@ -226,6 +282,10 @@ class RewireNetNodeClassification(torch.nn.Module):
             homo_loss = self.lifted_struct_loss(x, mask)
         elif self.objective == 'npair_loss':
             homo_loss = self.npair_loss(x, mask)
+        elif self.objective == 'naive_loss':
+            homo_loss = self.naive_loss(x, mask)
+        elif self.objective == 'e2e_loss':
+            homo_loss = self.e2e_loss(x, mask)
         else:
             homo_loss = 0
         # return homo_loss + self.sparsity_loss() + self.edge_weight_loss(x)
@@ -238,7 +298,6 @@ class RewireNetNodeClassification(torch.nn.Module):
     '''
 
     def forward(self):
-        x = self.x
         # Normalize learnable coefficient C, is it necessary?
         # C = torch.nn.functional.normalize(self.C, dim=0, p=2)
         # C = torch.nn.functional.normalize(self.C, dim=0, p=1)
@@ -246,18 +305,20 @@ class RewireNetNodeClassification(torch.nn.Module):
         # C = self.C
         # Construct a filtered laplacian by sum over all filter banks with C
         # L_hat = self.D.matmul(C).squeeze()
-        L_hat = self.mlp(self.D.view(self.data.num_nodes*self.data.num_nodes, -1)).squeeze()
-        L_hat = L_hat.view(self.data.num_nodes, self.data.num_nodes)
-
+        L_hat = self.spectral_mlp[0](self.D).squeeze()
         # I - L low-pass filter
-        y_hat = (self.I - L_hat).mm(x)
+        y_hat_1 = (self.I - L_hat).mm(self.feature_mlp[0](self.x))
 
-        y_hat = torch.cat((y_hat.view(self.data.num_nodes, self.data.num_features, 2), self.data.x.view(x.shape[0], -1, 1)), dim=2)
-        y_hat = y_hat.matmul(self.W).squeeze()
+        y_hat_2 = self.spectral_mlp[1](self.D).squeeze().mm(self.feature_mlp[1](self.random_signal))
+        y_hat_3 = self.feature_mlp[2](self.x)
+
+        # y_hat = torch.cat((y_hat.view(self.data.num_nodes, self.data.num_features, 2), self.data.x.view(x.shape[0], -1, 1)), dim=2)
+        # y_hat = y_hat.matmul(torch.nn.functional.normalize(self.W, p=1, dim=0)).squeeze()
 
         # return torch.nn.functional.normalize(y_hat, p=2, dim=1)
         # return y_hat.mm(self.W)
-        return y_hat
+        return torch.cat([y_hat_1, y_hat_2, y_hat_3], dim=1)
+        # return torch.cat([y_hat_1, y_hat_2, y_hat_3], dim=1)
 
     def decode_all(self, z):
         return z @ z.t()
@@ -267,7 +328,7 @@ class RewireNetNodeClassification(torch.nn.Module):
         with torch.no_grad():
             if self.objective == 'nce_loss':
                 dataset.data.edge_index = self.get_edges_cosin(y_hat)
-            elif self.objective in ['contrastive_loss', 'lifted_struct_loss']:
+            elif self.objective in ['contrastive_loss', 'lifted_struct_loss', 'npair_loss', 'naive_loss']:
                 dataset.data.edge_index = self.get_edges_pdist(y_hat)
         return dataset
 
@@ -279,7 +340,7 @@ class RewireNetNodeClassification(torch.nn.Module):
 
     def get_edges_pdist(self, x):
         dist = torch.nn.functional.pdist(x, p=2)
-        e = 0.05
+        e = 1
         indices = (dist < e).nonzero().view(-1)
         num_nodes = x.shape[0]
         rows = indices // num_nodes
@@ -294,9 +355,9 @@ class RewireNetGraphClassification(torch.nn.Module):
         self.num_classes = dataset.num_classes
         self.step = step
         # self.windows = math.ceil(2.1/self.step)
-        # self.mlp = torch.nn.Sequential(
-        #     torch.nn.Linear(11, 44), torch.nn.ReLU(), torch.nn.Linear(44, 1), torch.nn.ReLU(), torch.nn.Linear(11, 1)
-        #     )
+        self.mlp = torch.nn.Sequential(
+            torch.nn.Linear(11, 44), torch.nn.ReLU(), torch.nn.Linear(44, 1), torch.nn.ReLU(), torch.nn.Linear(11, 1)
+            )
         self.emb_dim = dataset[0].num_features
         self.node_encoder = None
         self.edge_encoder = None

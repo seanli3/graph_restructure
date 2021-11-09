@@ -104,7 +104,7 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
     return eval_info_early_model
 
 
-eval_info_early_model = run(DATASET, RewireNetNodeClassification, 20000, args.lr, 0.0005, 100, args.step)
+eval_info_early_model = run(DATASET, RewireNetNodeClassification, 2000, args.lr, 0.0005, 100, args.step)
 
 
 print()

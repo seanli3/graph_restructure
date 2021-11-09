@@ -336,12 +336,12 @@ def sample_negative_nodes_dict(mask, y, K):
     return torch.tensor(negative_samples, device=device)
 
 
-def sample_negative(num_classes, mask, y):
+def sample_negative_nodes_naive(mask, y):
     negative_samples = []
     selectedNodes = set()
     for _ in range(len(mask.nonzero(as_tuple=True)[0])):
         nodes = []
-        for i in range(num_classes):
+        for i in range(y.max().item()):
             if y[mask].bincount()[i] <= len(negative_samples):
                 continue
             iter = 0
@@ -356,6 +356,50 @@ def sample_negative(num_classes, mask, y):
                     break
         negative_samples.append(nodes)
     return list(filter(lambda s: len(s) > 1, negative_samples))
+
+
+def sample_negative_nodes_naive(mask, y):
+    positive_nodes = sample_positive_nodes_naive(mask, y)
+    return positive_nodes.T
+
+
+def sample_positive_nodes_naive(mask, y):
+    y_masked = y[mask]
+    positive_sample_mask = y_masked.view(1, -1) == torch.arange(y.max() + 1).view(-1, 1)
+    positive_samples = list(map(lambda s:s.nonzero().view(-1), positive_sample_mask))
+    min_len = min(map(len, positive_samples))
+    positive_samples = [np.random.choice(s.cpu(), min_len) for s in positive_samples]
+    return torch.tensor(positive_samples, device=device)
+
+
+def sample_negative_nodes_naive_2(mask, y):
+    negative_samples = []
+    selectedNodes = set()
+    for _ in range(len(mask.nonzero(as_tuple=True)[0])):
+        nodes = []
+        for i in range(y.max().item() + 1):
+            if y[mask].bincount()[i] <= len(negative_samples):
+                continue
+            iter = 0
+            while True:
+                iter += 1
+                n = np.random.choice((y.cpu() == i).logical_and(mask.cpu()).nonzero(as_tuple=True)[0])
+                if n not in selectedNodes:
+                    selectedNodes.add(n)
+                    nodes.append(n)
+                    break
+                if iter > 100:
+                    break
+        negative_samples.append(torch.tensor(nodes, device=device))
+    return list(filter(lambda s: len(s) > 1, negative_samples))
+
+
+def sample_positive_nodes_naive_2(mask, y):
+    positive_samples = []
+    for i in range(y.max().item() + 1):
+        if ((y == i).logical_and(mask)).any():
+            positive_samples.append((y == i).logical_and(mask).nonzero().view(-1))
+    return positive_samples
 
 
 def rewire_graph(model, dataset, keep_num_edges=False, threshold=None):

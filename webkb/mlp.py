@@ -3,9 +3,10 @@ import torch
 from random import seed as rseed
 from numpy.random import seed as nseed
 from webkb import get_dataset, run
+from config import SAVED_MODEL_PATH_NODE_CLASSIFICATION
 from torch import nn
 from torch_geometric.utils import get_laplacian
-from graph_dictionary.utils import create_filter
+from models.model import RewireNetNodeClassification
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
@@ -14,6 +15,7 @@ parser.add_argument('--runs', type=int, default=1)
 parser.add_argument('--epochs', type=int, default=3000)
 parser.add_argument('--seed', type=int, default=729, help='Random seed.')
 parser.add_argument('--lr', type=float, default=0.001)
+parser.add_argument('--rewired', action='store_true')
 parser.add_argument('--weight_decay', type=float, default=7.530100210192558e-05)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--hidden1', type=int, default=256)
@@ -45,41 +47,41 @@ if args.cuda:
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
-for split in range(10):
-    model = torch.load('./{}_best_model_split_{}.pt'.format(args.dataset, split))
-    C = model['C']
+class Net(torch.nn.Module):
+    def __init__(self, dataset):
+        super(Net, self).__init__()
+        self.layers = nn.Sequential(nn.Linear(192, 128),
+                                    nn.Dropout(0.2),
+                                    nn.Linear(128, 64),
+                                    nn.Linear(64, dataset.num_classes),
+                                    nn.ELU(inplace=True),
+                                    # nn.ReLU(inplace=True),
+                                    nn.LogSoftmax(dim=1))
 
-    class Net(torch.nn.Module):
-        def __init__(self, dataset):
-            super(Net, self).__init__()
-            self.layers = nn.Sequential(nn.Linear(dataset[0].num_node_features, args.hidden1),
-                                        nn.Dropout(args.dropout),
-                                        nn.Linear(args.hidden1, args.hidden2),
-                                        nn.Dropout(args.dropout),
-                                        nn.Linear(args.hidden2, dataset.num_classes),
-                                        nn.ELU(inplace=True),
-                                        # nn.ReLU(inplace=True),
-                                        nn.LogSoftmax(dim=1))
+    def reset_parameters(self):
+        for layer in self.layers:
+            if hasattr(layer, 'reset_parameters'):
+                layer.reset_parameters()
 
-            data = dataset[0]
-            L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
-            laplacian = torch.sparse_coo_tensor(L_index, L_weight).to_dense()
-            self.filters = [create_filter(laplacian, b).mm(data.x) for b in torch.arange(0, 2.1, 0.2)]
-            self.D = torch.cat(self.filters, dim=1)
-            self.x = self.D.mm(C)
+    def forward(self, data):
+        return self.layers(data.x), None, None
 
-        def reset_parameters(self):
-            for layer in self.layers:
-                if hasattr(layer, 'reset_parameters'):
-                    layer.reset_parameters()
 
-        def forward(self, data):
-            return self.layers(self.x), None, None
+def use_dataset(split):
+    dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc)
+    if args.rewired:
+        rewirer_state = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION.format(args.dataset, split))
+        step = rewirer_state['step']
+        rewirer = RewireNetNodeClassification(dataset, split, step)
+        rewirer.load_state_dict(rewirer_state['model'])
+        def transform_x(d):
+            d.data.x = rewirer().detach()
+            return d
+        new_dataset = get_dataset(
+            args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc, transform=transform_x
+        )
+    else:
+        new_dataset = dataset
+    return new_dataset
 
-    permute_masks = None
-
-    use_dataset = lambda : get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
-                                        permute_masks=permute_masks, cuda=args.cuda, lcc=args.lcc,
-                                        node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t)
-
-    run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, split=split)
+run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, cuda=args.cuda)
