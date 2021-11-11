@@ -1,8 +1,6 @@
 import os.path as osp
 import networkx as nx
-from webkb.webkb_data import WebKB
-
-
+from .webkb_data import WebKB
 
 def print_dataset(dataset):
     data = dataset[0]
@@ -19,3 +17,7 @@ for name in ['Cornell', 'Texas', 'Wisconsin']:
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
     dataset = WebKB(path, name)
     print_dataset(dataset)
+
+
+for name in ['Cora', 'CiteSeer', 'PubMed']:
+    print_dataset(get_planetoid_dataset(name))

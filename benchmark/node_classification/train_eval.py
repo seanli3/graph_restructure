@@ -1,7 +1,5 @@
 from __future__ import division
-
 import time
-
 import torch
 import torch.nn.functional as F
 from torch import tensor
@@ -9,21 +7,36 @@ from torch.optim import AdamW
 from sklearn.metrics import f1_score
 import numpy as np
 from tqdm import tqdm
+from dataset.datasets import get_dataset
+from models.encoder_node_classification import Rewirer
 
 
-def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=None, cuda=False):
+def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, cuda=False):
     device = torch.device('cuda' if cuda else 'cpu')
+
+    dataset = get_dataset(dataset_name, normalize_features, cuda=cuda)
+
+    if rewired:
+        rewirer = Rewirer(dataset[0], DATASET=dataset.name)
+        rewirer.load()
+        dataset = get_dataset(dataset_name, normalize_features, cuda=cuda, transform=rewirer.rewire)
+
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
+    data = dataset[0]
+    if len(data.train_mask.shape) > 1:
+        splits = data.train_mask.shape[0]
+        has_splits = True
+    else:
+        splits = 1
+        has_splits = False
     for _ in range(runs):
         print('Runs:', _)
-        for split in range(10):
-            print('Split:', split)
-
-            dataset = use_dataset(split)
-            data = dataset[0]
+        for split in range(splits):
+            if has_splits:
+                print('Split:', split)
 
             model = Model(dataset)
             model.to(device).reset_parameters()
@@ -38,8 +51,8 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
 
             pbar = tqdm(range(0, epochs))
             for epoch in pbar:
-                train(model, optimizer, data, split)
-                eval_info = evaluate(model, data, split)
+                train(model, optimizer, data, split=split if has_splits else None)
+                eval_info = evaluate(model, data, split=split if has_splits else None)
                 eval_info['epoch'] = epoch
                 if epoch % 10 == 0:
                     pbar.set_description(
@@ -50,9 +63,6 @@ def run(use_dataset, Model, runs, epochs, lr, weight_decay, patience, logger=Non
                                 eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
                             )
                     )
-
-                if logger is not None:
-                    logger(eval_info)
 
                 if eval_info['val_acc'] > best_val_acc or eval_info['val_loss'] < best_val_loss:
                     if eval_info['val_acc'] >= best_val_acc and eval_info['val_loss'] <= best_val_loss:
@@ -105,7 +115,8 @@ def cal_col_diff(model, data, split):
     with torch.no_grad():
         model.eval()
         _, embeddings = model(data)
-        test_embeddings = embeddings[data.test_mask[split]]
+        mask = data.test_mask[split] if split is not None else data.test_mask
+        test_embeddings = embeddings[mask]
         normalized_test_embeddings = test_embeddings/torch.linalg.norm(test_embeddings, 1, dim=0)
         index = list(range(test_embeddings.shape[1]))
         sum = 0
@@ -121,7 +132,8 @@ def cal_row_diff(model, data, split):
     with torch.no_grad():
         model.eval()
         _, embeddings = model(data)
-        test_embeddings = embeddings[data.test_mask[split]]
+        mask = data.test_mask[split] if split is not None else data.test_mask
+        test_embeddings = embeddings[mask]
         normalized_test_embeddings = test_embeddings/torch.linalg.norm(test_embeddings, 1, dim=1).view(-1, 1)
         # calculate row-diff
         index = list(range(test_embeddings.shape[0]))
@@ -132,20 +144,17 @@ def cal_row_diff(model, data, split):
         row_diff = sum / pow(test_embeddings.shape[0], 2)
     return row_diff
 
-def train(model, optimizer, data, split):
+def train(model, optimizer, data, split=None):
     model.train()
     optimizer.zero_grad()
     out = model(data)[0]
-    # coefficients = torch.eye(filterbanks[0].shape[0], filterbanks[0].shape[1])
-    # for c in filterbanks:
-    #     coefficients = spmm(c.indices(), c.values(), c.shape[0], c.shape[1], coefficients)
-    # discrimative_loss = coefficients.mean()
-    loss = F.nll_loss(out[data.train_mask[split]], data.y[data.train_mask[split]])
+    mask = data.train_mask[split] if split is not None else data.train_mask
+    loss = F.nll_loss(out[mask], data.y[mask])
     loss.backward()
     optimizer.step()
 
 
-def evaluate(model, data, split):
+def evaluate(model, data, split=None):
     model.eval()
 
     with torch.no_grad():
@@ -153,7 +162,7 @@ def evaluate(model, data, split):
 
     outs = {}
     for key in ['train', 'val', 'test']:
-        mask = data['{}_mask'.format(key)][split]
+        mask = data['{}_mask'.format(key)][split] if split is not None else data['{}_mask'.format(key)]
         loss = F.nll_loss(logits[mask], data.y[mask]).item()
 
         outs['{}_loss'.format(key)] = loss

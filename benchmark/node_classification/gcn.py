@@ -5,23 +5,18 @@ from torch_geometric.nn import GCNConv
 from random import seed as rseed
 from numpy.random import seed as nseed
 from pathlib import Path
-from config import SAVED_MODEL_PATH_NODE_CLASSIFICATION
-from models.encoder_node_classification import Rewirer
-from webkb import get_dataset, run
-from models.model import RewireNetNodeClassification
+from benchmark.node_classification.train_eval import run
 
 path = Path(__file__).parent
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
-parser.add_argument('--random_splits', type=bool, default=False)
 parser.add_argument('--runs', type=int, default=1)
 parser.add_argument('--epochs', type=int, default=2000)
 parser.add_argument('--seed', type=int, default=729, help='Random seed.')
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--weight_decay', type=float, default=0.0005)
 parser.add_argument('--patience', type=int, default=100)
-parser.add_argument('--lcc', type=bool, default=False)
 parser.add_argument('--hidden', type=int, default=64)
 parser.add_argument('--dropout', type=float, default=0.9)
 parser.add_argument('--normalize_features', type=bool, default=True)
@@ -64,20 +59,4 @@ class Net(torch.nn.Module):
         return F.log_softmax(x, dim=1), x
 
 
-def use_dataset(split):
-    dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc)
-    if args.rewired:
-        # rewirer_state = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION.format(args.dataset, split))
-        # step = rewirer_state['step']
-        # rewirer = RewireNetNodeClassification(dataset, split, step)
-        # rewirer.load_state_dict(rewirer_state['model'])
-        rewirer = Rewirer(dataset[0], DATASET=args.dataset)
-        rewirer.load()
-        new_dataset = get_dataset(args.dataset, args.normalize_features, cuda=args.cuda, lcc=args.lcc,
-                                  transform=rewirer.rewire)
-    else:
-        new_dataset = dataset
-    return new_dataset
-
-
-run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, cuda=args.cuda)
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, cuda=args.cuda)

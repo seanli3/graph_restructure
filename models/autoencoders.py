@@ -1,9 +1,10 @@
 import math
 from collections import OrderedDict
-from torch_geometric.utils import get_laplacian
+from torch_geometric.utils import get_laplacian, negative_sampling
 import torch
 from torch import nn
 import torch.nn.functional as F
+import shap
 from .utils import create_filter
 
 
@@ -47,6 +48,7 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
         self.layers[6].register_forward_hook(self.get_activation('sim'))
 
         self.x = data.x
+        self.data = data
 
     def get_activation(self, name):
         def hook(module, input, output):
@@ -68,10 +70,9 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
         return F.mse_loss(masked_a_hat, a.triu(diagonal=1))
 
     def sample_negative_edge_mask(self, a):
-        positive_edges= a.triu(diagonal=1).nonzero()
-        negative_edges = (1 - a).triu(diagonal=1).nonzero()
-        sampled_indices = torch.randperm(negative_edges.shape[0])[:positive_edges.shape[0]]
-        negative_edges = negative_edges[sampled_indices].T
+        positive_edges = a.triu(diagonal=1).count_nonzero()
+        negative_edges = negative_sampling(self.data.edge_index, num_nodes=self.data.num_nodes, method="dense",
+                                           num_neg_samples=positive_edges, force_undirected=True)
         mask = torch.zeros_like(a).bool().index_put((negative_edges[0], negative_edges[1]), torch.tensor(True))
         return mask
 
@@ -84,6 +85,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         self.L = torch.sparse_coo_tensor(L_index, L_weight, device=device).to_dense()
         self.D = create_filter(self.L, self.step).permute(1, 2, 0)
+        self.data = data
 
         self.A = None
         self.windows = math.ceil(2.1/self.step)
@@ -131,9 +133,13 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         return F.mse_loss(masked_a_hat, a.triu(diagonal=1))
 
     def sample_negative_edge_mask(self, a):
-        positive_edges= a.triu(diagonal=1).nonzero()
-        negative_edges = (1 - a).triu(diagonal=1).nonzero()
-        sampled_indices = torch.randperm(negative_edges.shape[0])[:positive_edges.shape[0]]
-        negative_edges = negative_edges[sampled_indices].T
+        positive_edges = a.triu(diagonal=1).count_nonzero()
+        negative_edges = negative_sampling(self.data.edge_index, num_nodes=self.data.num_nodes, method="dense",
+                                           num_neg_samples=positive_edges*2, force_undirected=True)
         mask = torch.zeros_like(a).bool().index_put((negative_edges[0], negative_edges[1]), torch.tensor(True))
         return mask
+
+    def explain(self):
+        self.explainer = shap.DeepExplainer(self.layers, self.D)
+        shap_values = self.explainer.shap_values(self.D)
+        shap.summary_plot(shap_values, features=self.D, feature_names=[str(i) for i in range(self.D.shape[2])])

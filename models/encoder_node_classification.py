@@ -1,6 +1,8 @@
 import torch
 from numpy.random import seed as nseed
 import numpy as np
+
+from dataset.datasets import get_dataset
 from models.autoencoders import NodeFeatureSimilarityEncoder, SpectralSimilarityEncoder
 import math
 from tqdm import tqdm
@@ -56,8 +58,8 @@ class Rewirer(torch.nn.Module):
         self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
         self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct')
         self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
-        # self.models = [self.fea_sim_model, self.struct_sim_model, self.conv_sim_model]
-        self.models = [self.fea_sim_model, self.struct_sim_model]
+        self.models = [self.fea_sim_model, self.struct_sim_model, self.conv_sim_model]
+        # self.models = [self.fea_sim_model, self.struct_sim_model]
 
     def train(self, epochs, lr, weight_decay, patience, step):
         data = self.data
@@ -101,26 +103,27 @@ class Rewirer(torch.nn.Module):
                         break
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
-            torch.save(best_model, SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(model.name + '_' + self.DATASET))
+            torch.save(best_model, SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(model.name + '_' + self.DATASET.lower()))
 
     def load(self):
         for model in self.models:
-            saved_model = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(model.name + '_' + self.DATASET))
+            saved_model = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(model.name + '_' + self.DATASET.lower()))
             model.load_state_dict(saved_model['model'])
 
     def rewire(self, dataset):
         a = torch.sparse_coo_tensor(dataset[0].edge_index, torch.ones(dataset[0].num_edges),
                                     (dataset[0].num_nodes, dataset[0].num_nodes), device=device)\
             .to_dense()
-        eps_1 = 0.999
-        eps_2 = 0.5
+        eps_1 = 0.9
+        eps_2 = 0.
         for model in self.models:
             a_hat = model()
-            a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
-            a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
+            # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
+            # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
+            a += a_hat
         a = a.triu(diagonal=1)
         a = a + a.T
-        dataset.data.edge_index = (a > 0).nonzero().T
+        dataset.data.edge_index = (a >= 2).nonzero().T
         # v, i = torch.topk(a.flatten(), int(dataset[0].num_edges/5))
         # edges = torch.tensor(np.array(np.unravel_index(i.cpu().numpy(), a.shape)), device=device).detach()
         # dataset.data.edge_index = edges
@@ -148,12 +151,6 @@ if __name__ == "__main__":
         print("-----------------------Training on CUDA-------------------------")
         torch.cuda.manual_seed(seed)
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
-
-    if DATASET.lower() in ['cora', 'citeseer', 'pubmed']:
-        from citation import get_dataset
-    else:
-        from webkb import get_dataset
 
     dataset = get_dataset(DATASET, normalize_features=True, cuda=cuda)
     data = dataset[0]
