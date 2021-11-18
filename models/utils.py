@@ -5,8 +5,9 @@ import numpy as np
 import torch
 from numpy.random import seed as nseed
 from torch_geometric.utils import get_laplacian
+from config import USE_CUDA
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
 
 class ASTNodeEncoder(torch.nn.Module):

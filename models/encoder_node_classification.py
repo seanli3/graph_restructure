@@ -7,13 +7,13 @@ from models.autoencoders import NodeFeatureSimilarityEncoder, SpectralSimilarity
 import math
 from tqdm import tqdm
 import argparse
-from config import SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT
+from config import SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT, USE_CUDA
 from copy import deepcopy
 from torch_geometric.utils import remove_self_loops, to_dense_adj
 from torch_scatter import scatter_add
 
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
 def get_normalized_adj(edge_index, edge_weight, num_nodes):
     edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
@@ -53,13 +53,13 @@ class Rewirer(torch.nn.Module):
         super(Rewirer, self).__init__()
         self.data = data
         self.DATASET = DATASET
-        random_signals = get_random_signals(data.num_nodes)
+        random_signals = get_random_signals(data.x.shape[0])
 
         self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
         self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct')
-        self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
-        self.models = [self.fea_sim_model, self.struct_sim_model, self.conv_sim_model]
-        # self.models = [self.fea_sim_model, self.struct_sim_model]
+        # self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
+        # self.models = [self.fea_sim_model, self.struct_sim_model, self.conv_sim_model]
+        self.models = [self.fea_sim_model, self.struct_sim_model]
 
     def train(self, epochs, lr, weight_decay, patience, step):
         data = self.data
@@ -73,12 +73,12 @@ class Rewirer(torch.nn.Module):
 
             pbar = tqdm(range(0, epochs))
 
+            optimizer = torch.optim.AdamW(
+                model.parameters(), lr=lr, weight_decay=weight_decay
+            )
+
             for epoch in pbar:
                 model.train()
-                # Predict and calculate loss for user factor and bias
-                optimizer = torch.optim.AdamW(
-                    model.parameters(), lr=lr, weight_decay=weight_decay
-                )  # learning rate
                 x_hat = model()
                 loss = model.loss(x_hat, adj)
                 # Backpropagate
@@ -105,6 +105,91 @@ class Rewirer(torch.nn.Module):
                 torch.cuda.synchronize()
             torch.save(best_model, SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(model.name + '_' + self.DATASET.lower()))
 
+    def train_alt(self, epochs, lr, weight_decay, patience, step):
+        data = self.data
+        for model in self.models:
+            model.reset_parameters()
+
+        best_loss_struct = float('inf')
+        best_loss_fea = float('inf')
+        best_model_fea = {}
+        best_model_struct = {}
+        bad_counter = 0
+
+        pbar = tqdm(range(0, epochs))
+
+        optimizers = [
+            torch.optim.AdamW(
+                self.fea_sim_model.parameters(), lr=lr, weight_decay=weight_decay
+            ),
+            torch.optim.AdamW(
+                self.struct_sim_model.parameters(), lr=lr, weight_decay=weight_decay
+            ), ]
+        loss_struct = torch.tensor(float('inf'))
+        loss_fea = torch.tensor(float('inf'))
+        for epoch in pbar:
+            if epoch // 5 % 2 == 0:
+                self.struct_sim_model.eval()
+                self.fea_sim_model.train()
+
+                x_hat_fea = self.fea_sim_model()
+                x_hat_struct = self.struct_sim_model()
+
+                loss_fea = self.fea_sim_model.loss(x_hat_fea, x_hat_struct)
+                loss_fea.backward()
+                optimizers[0].step()
+                optimizers[0].zero_grad()
+            else:
+                self.struct_sim_model.train()
+                self.fea_sim_model.eval()
+
+                x_hat_fea = self.fea_sim_model()
+                x_hat_struct = self.struct_sim_model()
+
+                loss_struct = self.struct_sim_model.loss(x_hat_fea, x_hat_struct)
+                loss_struct.backward()
+                optimizers[1].step()
+                optimizers[1].zero_grad()
+
+            pbar.set_description('Epoch: {}, fea loss: {:.2f}, struct loss: {:.2f}'\
+                                 .format(epoch, loss_fea.item(), loss_struct.item()))
+
+            if loss_fea < best_loss_fea:
+                best_model_fea['train_loss'] = best_loss_fea
+                best_model_fea['loss'] = best_loss_fea
+                best_model_fea['epoch'] = epoch
+                best_model_fea['step'] = step
+                best_model_fea['model'] = deepcopy(self.fea_sim_model.state_dict())
+                best_loss_fea = loss_fea
+                bad_counter = 0
+
+                torch.save(
+                    best_model_fea, SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(
+                        self.fea_sim_model.name + '_' + self.DATASET.lower()
+                    )
+                )
+
+            elif loss_struct < best_loss_struct:
+                best_model_struct['train_loss'] = best_loss_struct
+                best_model_struct['loss'] = best_loss_struct
+                best_model_struct['epoch'] = epoch
+                best_model_struct['step'] = step
+                best_model_struct['model'] = deepcopy(self.struct_sim_model.state_dict())
+                best_loss_struct = loss_struct
+                bad_counter = 0
+                torch.save(
+                    best_model_struct, SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(
+                        self.struct_sim_model.name + '_' + self.DATASET.lower()
+                    )
+                )
+            else:
+                bad_counter += 1
+                if bad_counter == patience:
+                    break
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+
     def load(self):
         for model in self.models:
             saved_model = torch.load(SAVED_MODEL_PATH_NODE_CLASSIFICATION_NO_SPLIT.format(model.name + '_' + self.DATASET.lower()))
@@ -123,7 +208,7 @@ class Rewirer(torch.nn.Module):
             a += a_hat
         a = a.triu(diagonal=1)
         a = a + a.T
-        dataset.data.edge_index = (a >= 2).nonzero().T
+        dataset.data.edge_index = (a >= 1.8).nonzero().T
         # v, i = torch.topk(a.flatten(), int(dataset[0].num_edges/5))
         # edges = torch.tensor(np.array(np.unravel_index(i.cpu().numpy(), a.shape)), device=device).detach()
         # dataset.data.edge_index = edges
@@ -142,18 +227,17 @@ if __name__ == "__main__":
 
     print(DATASET)
 
-    cuda = torch.cuda.is_available()
     seed = 42
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    if cuda:
+    if torch.cuda.is_available() and USE_CUDA:
         print("-----------------------Training on CUDA-------------------------")
         torch.cuda.manual_seed(seed)
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    dataset = get_dataset(DATASET, normalize_features=True, cuda=cuda)
+    dataset = get_dataset(DATASET, normalize_features=True)
     data = dataset[0]
 
-    module = Rewirer(data, step=0.2, layers=[256, 128, 64], DATASET=DATASET)
-    module.train(epochs=5000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step)
+    module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET)
+    module.train(epochs=10000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step)

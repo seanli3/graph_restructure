@@ -9,20 +9,22 @@ import numpy as np
 from tqdm import tqdm
 from dataset.datasets import get_dataset
 from models.encoder_node_classification import Rewirer
+from config import USE_CUDA
+
+device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
 
-def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, cuda=False):
-    device = torch.device('cuda' if cuda else 'cpu')
+def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True):
 
-    dataset = get_dataset(dataset_name, normalize_features, cuda=cuda)
+    dataset = get_dataset(dataset_name, normalize_features)
 
     if rewired:
-        rewirer = Rewirer(dataset[0], DATASET=dataset.name)
+        rewirer = Rewirer(dataset[0], DATASET=dataset.name, step=0.2)
         rewirer.load()
-        dataset = get_dataset(dataset_name, normalize_features, cuda=cuda, transform=rewirer.rewire)
+        dataset = get_dataset(dataset_name, normalize_features, transform=rewirer.rewire)
 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
-    if torch.cuda.is_available():
+    if device == torch.device('cuda'):
         torch.cuda.synchronize()
 
     data = dataset[0]
@@ -76,7 +78,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                     if bad_counter == patience:
                         break
 
-            if torch.cuda.is_available():
+            if device == torch.device('cuda'):
                 torch.cuda.synchronize()
 
             t_end = time.perf_counter()
@@ -149,7 +151,7 @@ def train(model, optimizer, data, split=None):
     optimizer.zero_grad()
     out = model(data)[0]
     mask = data.train_mask[split] if split is not None else data.train_mask
-    loss = F.nll_loss(out[mask], data.y[mask])
+    loss = F.nll_loss(out[mask], data.y[mask].view(-1))
     loss.backward()
     optimizer.step()
 
@@ -163,7 +165,7 @@ def evaluate(model, data, split=None):
     outs = {}
     for key in ['train', 'val', 'test']:
         mask = data['{}_mask'.format(key)][split] if split is not None else data['{}_mask'.format(key)]
-        loss = F.nll_loss(logits[mask], data.y[mask]).item()
+        loss = F.nll_loss(logits[mask], data.y[mask].view(-1)).item()
 
         outs['{}_loss'.format(key)] = loss
         outs['{}_acc'.format(key)] = f1_score(data.y[mask].cpu(), logits[mask].max(1)[1].cpu(), average='micro')

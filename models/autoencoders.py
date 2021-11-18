@@ -6,9 +6,9 @@ from torch import nn
 import torch.nn.functional as F
 import shap
 from .utils import create_filter
+from config import USE_CUDA
 
-
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
 
 class CosineSimilarity(nn.Module):
@@ -71,7 +71,7 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
 
     def sample_negative_edge_mask(self, a):
         positive_edges = a.triu(diagonal=1).count_nonzero()
-        negative_edges = negative_sampling(self.data.edge_index, num_nodes=self.data.num_nodes, method="dense",
+        negative_edges = negative_sampling(self.data.edge_index, num_nodes=self.data.num_nodes, method="sparse",
                                            num_neg_samples=positive_edges, force_undirected=True)
         mask = torch.zeros_like(a).bool().index_put((negative_edges[0], negative_edges[1]), torch.tensor(True))
         return mask

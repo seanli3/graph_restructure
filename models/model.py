@@ -13,9 +13,9 @@ from .utils import (
     sample_negative_nodes_nce, sample_negative_nodes_cont, sample_positive_nodes_cont, sample_positive_nodes_dict,
     sample_negative_nodes_dict, sample_positive_nodes_naive, sample_negative_nodes_naive, sample_positive_nodes_naive_2, sample_negative_nodes_naive_2
 )
+from config import USE_CUDA
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
+device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
 class RewireNetNodeClassification(torch.nn.Module):
     def __init__(self, dataset, split, step, objective="naive_loss"):

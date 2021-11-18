@@ -41,7 +41,7 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
         splits = 10
         from webkb import get_dataset
 
-    dataset = get_dataset(name, normalize_features=True, cuda=cuda)
+    dataset = get_dataset(name, normalize_features=True)
 
     for split in range(splits):
         print('Split:', split)
