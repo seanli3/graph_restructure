@@ -6,9 +6,121 @@ import torch
 from numpy.random import seed as nseed
 from torch_geometric.utils import get_laplacian
 from config import USE_CUDA
+from torch_scatter import scatter_add
+from torch_geometric.utils import remove_self_loops
 
 device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
+
+def compat_matrix_edge_idx(edge_idx, labels):
+    """
+     c x c compatibility matrix, where c is number of classes
+     H[i,j] is proportion of endpoints that are class j
+     of edges incident to class i nodes
+     "Generalizing GNNs Beyond Homophily"
+     treats negative labels as unlabeled
+     """
+    edge_index = remove_self_loops(edge_idx)[0]
+    src_node, targ_node = edge_index[0,:], edge_index[1,:]
+    labeled_nodes = (labels[src_node] >= 0) * (labels[targ_node] >= 0)
+    label = labels.squeeze().to(device)
+    c = label.max()+1
+    H = torch.zeros((c,c)).to(device)
+    src_label = label[src_node[labeled_nodes]]
+    targ_label = label[targ_node[labeled_nodes]]
+    label_idx = torch.cat((src_label.unsqueeze(0), targ_label.unsqueeze(0)), axis=0)
+    for k in range(c):
+        sum_idx = torch.where(src_label == k)[0]
+        add_idx = targ_label[sum_idx]
+        scatter_add(torch.ones_like(add_idx, device=device).to(H.dtype), add_idx, out=H[k,:], dim=-1)
+    return H
+
+
+def normalized_compat_matrix_edge_idx(edge_idx, label):
+    label = label.squeeze()
+    c = label.max() + 1
+    H = compat_matrix_edge_idx(edge_idx, label)
+    nonzero_label = label[label >= 0]
+    counts = nonzero_label.unique(return_counts=True)[1]
+    complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
+    complete_graph_edges = complete_graph_edges - torch.diag(counts)
+    # H2 = H / complete_graph_edges
+    num_nodes = label.shape[0]
+    total = num_nodes * (num_nodes - 1)
+    H2 = H / complete_graph_edges
+    H2[H2.isnan()] = 0
+    H1 = H / torch.sum(H, axis=1, keepdims=True)
+    H1[H1.isnan()] = 0
+    # val = H1 * (1 - H2)
+    val = H2
+    return val
+
+
+def homophily(edge_index, label):
+    """
+    our measure \hat{h}
+    treats negative labels as unlabeled
+    """
+    label = label.squeeze()
+    nonzero_label = label[label >= 0]
+    c = label.max()+1
+    counts = nonzero_label.unique(return_counts=True)[1]
+    H = compat_matrix_edge_idx(edge_index, label)
+    H = H / torch.sum(H, axis=1, keepdims=True)
+    nonzero_label = label[label >= 0]
+    proportions = counts.float() / nonzero_label.shape[0]
+    val = 0
+    for k in range(c):
+        class_add = torch.clamp(H[k,k] - proportions[k], min=0)
+        if not torch.isnan(class_add):
+            # only add if not nan
+            val += class_add
+    val /= c-1
+    return val
+
+
+def our_homophily_measure(edge_index, label):
+    """
+    our measure \hat{h}
+    treats negative labels as unlabeled
+    """
+    label = label.squeeze()
+    c = label.max()+1
+    H = compat_matrix_edge_idx(edge_index, label)
+    nonzero_label = label[label >= 0]
+    counts = nonzero_label.unique(return_counts=True)[1]
+    num_nodes = label.shape[0]
+
+    h = 0
+    scale_factor = 1
+    for k in range(c):
+        h_homo = H[k, k]*2/(counts[k]*(counts[k]+1))
+        h_hete = (H[k].sum() - H[k, k])/(counts[k]*(num_nodes - counts[k]))
+        h += torch.tanh(scale_factor * h_homo) - torch.tanh(scale_factor * h_hete)
+    return h/c
+    # complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
+    # # complete_graph_edges = complete_graph_edges - torch.diag(counts)
+    # complete_graph_edges = complete_graph_edges + torch.diag(counts)
+    # complete_graph_edges[torch.eye(c,c).bool()] = (complete_graph_edges.diag().float()/2).long()
+    #
+    # h_homo = H.diag() / complete_graph_edges.diag()
+    # h_hete = (H / complete_graph_edges).fill_diagonal_(0).sum(dim=1) / (c-1)
+    #
+    # h_homo[h_homo.isnan()] = 0
+    # h_hete[h_hete.isnan()] = 0
+    # # h_homo = h_homo.where(h_homo > 0.1, 0.1)
+    # # h_hete = h_hete.where(h_hete > 0.1, 0.1)
+    # density_cap = 0.1
+    # cap_deg = density_cap*(counts - 1)/2
+    # sparsity_factor = 10
+    # # scale_factor = sparsity_factor*(counts - 1)/(2*cap_deg) # 100
+    # scale_factor = sparsity_factor * 20
+    # h_homo = torch.tanh(scale_factor * h_homo)
+    # h_hete = torch.tanh(scale_factor * h_hete)
+    # # h_homo = h_homo / ((num_nodes - counts) / counts)
+    #
+    # val = (h_homo - h_hete).mean()
+    # return val
 
 class ASTNodeEncoder(torch.nn.Module):
     '''
@@ -221,6 +333,26 @@ def test():
         print(seq_dec)
         print('')
 
+# This new rational approximator does not show any advatanges so far
+def create_filter_new(laplacian, step, num_nodes, order=4):
+    offset = torch.arange(0, 2, step, device=device).view(-1, 1, 1)
+    a = 1/step
+    tmp = 2*a*laplacian - torch.eye(num_nodes, device=device)*(2*a*offset + 1)
+    # res = res.double()
+    if len(laplacian.shape) > 1:
+        i = 0
+        while True:
+            res = tmp.matrix_power(2 * (order - i)) + torch.eye(num_nodes, device=device)
+            try:
+                res = res.matrix_power(-1)
+                break
+            except RuntimeError as e:
+                i += 1
+                print('matrix not invertible, decreasing order to ' + str(order - i))
+    else:
+        res = tmp.pow(2*order) + 1
+        res = res.pow(-1)
+    return res.float()
 
 def create_filter(laplacian, step):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))

@@ -9,36 +9,54 @@ import numpy as np
 from tqdm import tqdm
 from dataset.datasets import get_dataset
 from models.encoder_node_classification import Rewirer
-from config import USE_CUDA
+from config import USE_CUDA, SEED
 
 device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
 
 
-def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True):
+def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True,
+        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, edge_per=0.8, model_indices=[0,1]):
 
     dataset = get_dataset(dataset_name, normalize_features)
-
-    if rewired:
-        rewirer = Rewirer(dataset[0], DATASET=dataset.name, step=0.2)
-        rewirer.load()
-        dataset = get_dataset(dataset_name, normalize_features, transform=rewirer.rewire)
-
-    val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
-    if device == torch.device('cuda'):
-        torch.cuda.synchronize()
-
-    data = dataset[0]
-    if len(data.train_mask.shape) > 1:
-        splits = data.train_mask.shape[0]
+    if len(dataset.data.train_mask.shape) > 1:
+        splits = dataset.data.train_mask.shape[1]
         has_splits = True
     else:
         splits = 1
         has_splits = False
-    for _ in range(runs):
-        print('Runs:', _)
-        for split in range(splits):
-            if has_splits:
-                print('Split:', split)
+
+    val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
+    for split in range(splits):
+        from random import seed as rseed
+        from numpy.random import seed as nseed
+        rseed(SEED)
+        nseed(SEED)
+        torch.manual_seed(SEED)
+
+        if device == torch.device('cuda'):
+            print("-----------------------Training on CUDA-------------------------")
+            torch.cuda.manual_seed(SEED)
+            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+        if has_splits:
+            print('Split:', split)
+        if rewired:
+            dataset = get_dataset(dataset_name, normalize_features)
+            rewirer = Rewirer(
+                dataset[0], DATASET=dataset.name, step=rewirer_step, layers=rewirer_layers,
+                mode=rewirer_mode, split=split if has_splits else None)
+            rewirer.load()
+            dataset = get_dataset(dataset_name, normalize_features,
+                                  transform=lambda d:rewirer.rewire(d, model_indices,edge_per)
+                                  )
+
+        if device == torch.device('cuda'):
+            torch.cuda.synchronize()
+
+        data = dataset[0]
+
+        for _ in range(runs):
+            print('Runs:', _)
 
             model = Model(dataset)
             model.to(device).reset_parameters()
@@ -66,10 +84,9 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                             )
                     )
 
-                if eval_info['val_acc'] > best_val_acc or eval_info['val_loss'] < best_val_loss:
-                    if eval_info['val_acc'] >= best_val_acc and eval_info['val_loss'] <= best_val_loss:
-                        eval_info_early_model = eval_info
-                        # torch.save(model.state_dict(), './best_{}_single_dec_split_{}.pkl'.format(dataset.name, split))
+                if eval_info['val_acc'] > best_val_acc:
+                    eval_info_early_model = eval_info
+                    # torch.save(model.state_dict(), './best_{}_single_dec_split_{}.pkl'.format(dataset.name, split))
                     best_val_acc = np.max((best_val_acc, eval_info['val_acc']))
                     best_val_loss = np.min((best_val_loss, eval_info['val_loss']))
                     bad_counter = 0
@@ -150,7 +167,7 @@ def train(model, optimizer, data, split=None):
     model.train()
     optimizer.zero_grad()
     out = model(data)[0]
-    mask = data.train_mask[split] if split is not None else data.train_mask
+    mask = data.train_mask[:, split] if split is not None else data.train_mask
     loss = F.nll_loss(out[mask], data.y[mask].view(-1))
     loss.backward()
     optimizer.step()
@@ -164,7 +181,7 @@ def evaluate(model, data, split=None):
 
     outs = {}
     for key in ['train', 'val', 'test']:
-        mask = data['{}_mask'.format(key)][split] if split is not None else data['{}_mask'.format(key)]
+        mask = data['{}_mask'.format(key)][:, split] if split is not None else data['{}_mask'.format(key)]
         loss = F.nll_loss(logits[mask], data.y[mask].view(-1)).item()
 
         outs['{}_loss'.format(key)] = loss

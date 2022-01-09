@@ -1,10 +1,9 @@
 import os.path as osp
 import torch.cuda
-from torch_geometric.datasets import Amazon, Planetoid, Coauthor, Reddit, Flickr, Yelp
+from torch_geometric.datasets import Amazon, Planetoid, Coauthor, Reddit, Flickr, Yelp, WebKB, WikipediaNetwork, Actor
 from ogb.nodeproppred import PygNodePropPredDataset
-from .webkb_data import WebKB
 import torch_geometric.transforms as T
-from torch_geometric.utils import add_self_loops
+from torch_geometric.utils import add_self_loops, remove_self_loops
 from torch_geometric.utils import is_undirected, to_undirected
 from config import USE_CUDA
 
@@ -26,8 +25,12 @@ def get_dataset(name, normalize_features=False, transform=None,
         dataset = Flickr(path)
     elif name.lower() in ['yelp']:
         dataset = Yelp(path)
-    elif name.lower() in ['cornell', 'texas', 'wisconsin', 'chameleon', 'film', 'squirrel']:
+    elif name.lower() in ['cornell', 'texas', 'wisconsin']:
         dataset = WebKB(path, name)
+    elif name.lower() in ['chameleon', 'squirrel']:
+        dataset = WikipediaNetwork(path, name, True)
+    elif name.lower() in ['actor']:
+        dataset = Actor(path)
     else:
         dataset = PygNodePropPredDataset(name=name, root=path, transform=T.ToSparseTensor())
 
