@@ -19,9 +19,13 @@ parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--weight_decay', type=float, default=0.0005)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--hidden', type=int, default=64)
-parser.add_argument('--dropout', type=float, default=0.5)
+parser.add_argument('--dropout', type=float, default=0.9)
 parser.add_argument('--normalize_features', type=bool, default=True)
 parser.add_argument('--rewired', action='store_true')
+parser.add_argument('--rewirer_step', type=float, default=0.2)
+parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
+parser.add_argument('--edge_per', type=float, default=1)
+parser.add_argument('--rewirer_mode', type=str, default='supervised')
 args = parser.parse_args()
 
 
@@ -52,10 +56,12 @@ class Net(torch.nn.Module):
         edge_weight = None
 
         # edge_index = torch.eye(x.shape[0], x.shape[0]).nonzero().T
+        x = F.dropout(x, p=args.dropout, training=self.training)
         x = F.relu(self.conv1(x, edge_index, edge_weight))
         x = F.dropout(x, p=args.dropout, training=self.training)
         x = self.conv2(x, edge_index, edge_weight)
         return F.log_softmax(x, dim=1), x
 
 
-run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience)
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
+    edge_per=args.edge_per, model_indices=args.model_indices, rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step)

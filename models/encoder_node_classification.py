@@ -91,6 +91,10 @@ class Rewirer(torch.nn.Module):
             train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
             val_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
             self.train_supervised(epochs, lr, weight_decay, patience, step, train_mask, val_mask)
+        elif self.mode == 'kmeans':
+            train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
+            val_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
+            self.train_supervised_kmeans(epochs, lr, weight_decay, patience, step, train_mask, val_mask)
         elif self.mode == 'unsupervised':
             self.train_unsupervised(epochs, lr, weight_decay, patience, step)
         elif self.mode == 'vae':
@@ -115,7 +119,7 @@ class Rewirer(torch.nn.Module):
 
             for epoch in pbar:
                 model.train()
-                x_hat = model()
+                x_hat = model.sim()
                 loss = model.loss(x_hat, community, train_mask)
                 if optimizer is not None:
                     optimizer.zero_grad()
@@ -151,6 +155,65 @@ class Rewirer(torch.nn.Module):
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
 
+    def train_supervised_kmeans(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask):
+        data = self.data
+        community = create_label_sim_matrix(data, train_mask)
+        val_community = create_label_sim_matrix(data, val_mask)
+
+        for model in self.models[1:]:
+            model.reset_parameters()
+            best_acc = float(0)
+            best_model = {}
+            bad_counter = 0
+
+            pbar = tqdm(range(0, epochs))
+
+            optimizer = torch.optim.AdamW(
+                model.parameters(), lr=lr, weight_decay=weight_decay
+            ) if len(list(model.parameters())) > 0 else None
+
+            for epoch in pbar:
+                model.train()
+                x_hat = model.sim()
+                loss = model.loss(x_hat, community, train_mask)
+                if optimizer is not None:
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                model.eval()
+                val_loss = model.loss(x_hat, val_community, val_mask)
+                train_acc, val_acc, test_acc = self.kmeans([self.models.index(model)], self.split)
+                pbar.set_description(
+                    'Epoch: {}, loss: {:.3f} val loss: {:.3f} train acc {:.3f}, val acc {:.3f}, test acc {:.3f}'.format(
+                        epoch, loss.item(), val_loss.item(), train_acc, val_acc, test_acc
+                    )
+                )
+
+                if val_acc > best_acc:
+                    best_model['train_loss'] = loss
+                    best_model['val_loss'] = val_loss
+                    best_model['epoch'] = epoch
+                    best_model['step'] = step
+                    best_model['model'] = deepcopy(model.state_dict())
+                    best_acc = val_acc
+                    bad_counter = 0
+                else:
+                    bad_counter += 1
+                    if bad_counter == patience:
+                        break
+
+            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}'.format(
+                self.DATASET.lower(), self.mode, model.name
+            ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_split_{}'.format(
+                self.DATASET.lower(), self.mode, model.name, self.split
+            ) + '.pt'
+            torch.save(
+                best_model, file_name
+            )
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
     def train_vae(self, epochs, lr, weight_decay, patience, step):
         data = self.data
         adj = get_adj(data.edge_index, data.edge_attr, data.num_nodes)
@@ -169,7 +232,7 @@ class Rewirer(torch.nn.Module):
 
             for epoch in pbar:
                 model.train()
-                x_hat = model()
+                x_hat = model.sim()
                 num_samples = data.edge_index.shape[1]//3 * 2
                 negative_sample_mask = self.sample_negative_edge_mask(data.edge_index, num_samples)
                 positive_sample_mask = self.sample_edge_mask(data.edge_index, num_samples)
@@ -229,8 +292,8 @@ class Rewirer(torch.nn.Module):
                 self.struct_sim_model.eval()
                 self.fea_sim_model.train()
 
-                x_hat_fea = self.fea_sim_model()
-                x_hat_struct = self.struct_sim_model()
+                x_hat_fea = self.fea_sim_model.sim()
+                x_hat_struct = self.struct_sim_model.sim()
 
                 loss_fea = self.fea_sim_model.loss(x_hat_fea, x_hat_struct)
                 loss_fea.backward()
@@ -240,8 +303,8 @@ class Rewirer(torch.nn.Module):
                 self.struct_sim_model.train()
                 self.fea_sim_model.eval()
 
-                x_hat_fea = self.fea_sim_model()
-                x_hat_struct = self.struct_sim_model()
+                x_hat_fea = self.fea_sim_model.sim()
+                x_hat_struct = self.struct_sim_model.sim()
 
                 loss_struct = self.struct_sim_model.loss(x_hat_fea, x_hat_struct)
                 loss_struct.backward()
@@ -330,7 +393,7 @@ class Rewirer(torch.nn.Module):
             # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
             # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
             for model in map(self.models.__getitem__, model_indices):
-                a_hat = model().squeeze()
+                a_hat = model.sim().squeeze()
                 # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
@@ -369,7 +432,7 @@ class Rewirer(torch.nn.Module):
 
                     # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
                     for model in map(self.models.__getitem__, model_indices):
-                        a_hat = model().squeeze()
+                        a_hat = model.sim().squeeze()
                         # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
                         # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                         # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
@@ -418,11 +481,11 @@ class Rewirer(torch.nn.Module):
                 # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
                 for model in map(self.models.__getitem__, model_indices):
                     model.to(device)
-                    a_hat = model().squeeze()
+                    a_hat = model.sim().squeeze()
                     # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
                     # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                     # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
-                    a += a_hat
+                    a = a * a_hat
                 a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
                 # print(a.min(), a.max())
                 # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
@@ -444,6 +507,39 @@ class Rewirer(torch.nn.Module):
             plt.axhline(y=ori_homo, color='r', linestyle='-')
             plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
             plt.show()
+
+    def kmeans(self, model_indices, split):
+        from kmeans_pytorch import kmeans
+        from sklearn.metrics import f1_score
+        with torch.no_grad():
+            for model in self.models:
+                model.to(device)
+            x = torch.cat([self.models[i]() for i in model_indices], dim=1)
+            num_classes = self.data.y.max().item() + 1
+            cluster_ids_x, cluster_centers = kmeans(
+                X=x, num_clusters=num_classes, distance='cosine', device=device
+            )
+            predicted = torch.zeros_like(cluster_ids_x)
+            y = self.data.y
+            train_mask = self.data.train_mask[:, split] if split is not None else data.train_mask
+            val_mask = self.data.val_mask[:, split] if split is not None else data.val_mask
+            test_mask = self.data.test_mask[:, split] if split is not None else data.test_mask
+            for i in range(num_classes):
+                predicted[cluster_ids_x == i] = y[cluster_ids_x == i].bincount().argmax()
+
+            train_acc = f1_score(
+                self.data.y.cpu()[train_mask],
+                predicted[train_mask].cpu(),
+                average='micro'
+            )
+            val_acc = f1_score(
+                self.data.y.cpu()[val_mask], predicted[val_mask].cpu(), average='micro'
+            )
+            test_acc = f1_score(
+                self.data.y.cpu()[test_mask], predicted[test_mask].cpu(), average='micro'
+            )
+            # print('train acc: {:.3f}, val acc: ${:.3f}, test acc: ${:.3f}'.format(train_acc, val_acc, test_acc))
+            return train_acc, val_acc, test_acc
 
 
 if __name__ == "__main__":
