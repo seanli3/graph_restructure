@@ -61,6 +61,7 @@ def create_label_sim_matrix(data, mask):
         indices = torch.tensor(list(combinations(index, 2))).T
         if len(indices) > 0:
             community.index_put_((indices[0], indices[1]), torch.tensor(1.0, device=device))
+            community.index_put_((indices[1], indices[0]), torch.tensor(1.0, device=device))
     return community
 
 
