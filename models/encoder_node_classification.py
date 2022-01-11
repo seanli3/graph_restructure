@@ -62,6 +62,7 @@ def create_label_sim_matrix(data, mask):
         if len(indices) > 0:
             community.index_put_((indices[0], indices[1]), torch.tensor(1.0, device=device))
             community.index_put_((indices[1], indices[0]), torch.tensor(1.0, device=device))
+            community.fill_diagonal_(1)
     return community
 
 
@@ -129,7 +130,7 @@ class Rewirer(torch.nn.Module):
 
                 model.eval()
                 val_loss = model.loss(x_hat, val_community, val_mask)
-                pbar.set_description('Epoch: {}, loss: {:.2f} val loss: {:.2f}'.format(epoch, loss.item(), val_loss.item()))
+                pbar.set_description('Epoch: {}, loss: {:.3f} val loss: {:.3f}'.format(epoch, loss.item(), val_loss.item()))
 
                 if val_loss < best_loss:
                     best_model['train_loss'] = loss
@@ -245,7 +246,7 @@ class Rewirer(torch.nn.Module):
                 optimizer.step()
                 optimizer.zero_grad()
 
-                pbar.set_description('Epoch: {}, loss: {:.2f}'.format(epoch, loss.item()))
+                pbar.set_description('Epoch: {}, loss: {:.3f}'.format(epoch, loss.item()))
 
                 if loss < best_loss:
                     best_model['train_loss'] = loss
@@ -312,7 +313,7 @@ class Rewirer(torch.nn.Module):
                 optimizers[1].step()
                 optimizers[1].zero_grad()
 
-            pbar.set_description('Epoch: {}, fea loss: {:.2f}, struct loss: {:.2f}'\
+            pbar.set_description('Epoch: {}, fea loss: {:.3f}, struct loss: {:.3f}'\
                                  .format(epoch, loss_fea.item(), loss_struct.item()))
 
             if loss_fea < best_loss_fea:
