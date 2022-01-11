@@ -1,0 +1,10 @@
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=0
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=1
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=2
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=3
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=4
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=5
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=6
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=7
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=8
+python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=9
