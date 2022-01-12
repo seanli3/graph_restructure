@@ -36,14 +36,7 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
                 [nn.Linear(layer_size[l], layer_size[l + 1], bias=False)] for l in range(len(layers))
             ]))
         )
-
         self.outputs = {}
-
-        # self.layers[0].register_forward_hook(self.get_activation('lin1'))
-        # self.layers[2].register_forward_hook(self.get_activation('lin2'))
-        # self.layers[4].register_forward_hook(self.get_activation('lin3'))
-        # self.layers[6].register_forward_hook(self.get_activation('sim'))
-
         self.x = data.x
         self.data = data
 
@@ -69,25 +62,12 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
 
     def loss(self, a_hat, a, mask=None):
         a_hat = a_hat.squeeze()
-        # negative_mask = self.sample_negative_edge_mask(self.data.edge_index)
-        # positive_mask = a > 0
-        # masked_a_hat = torch.relu(a_hat).where(negative_mask.logical_or(positive_mask), torch.zeros(1, device=device)).triu(diagonal=1)
-        # masked_a = torch.zeros_like(a, device=device).where(positive_mask.logical_and(negative_mask.logical_not()), torch.relu(a).triu(diagonal=1))
-        # return F.mse_loss(masked_a_hat, masked_a)
         if mask is not None:
             masked_a = a[mask][:,mask]
             masked_a_hat = a_hat[mask][:,mask]
             return F.mse_loss(masked_a_hat, masked_a)
         else:
             return F.mse_loss(a_hat, a)
-
-    def sample_negative_edge_mask(self, edge_index):
-        positive_edges = edge_index.shape[1]
-        negative_edges = negative_sampling(edge_index, num_nodes=self.data.num_nodes, method="sparse",
-                                           num_neg_samples=positive_edges, force_undirected=True)
-        mask = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool().index_put((negative_edges[0], negative_edges[1]),
-                                                                   torch.tensor(True, device=device))
-        return mask
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
@@ -101,32 +81,26 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         self.data = data
 
         self.A = None
-        self.windows = math.ceil(2.1/self.step)
-
-        self.x = x
+        self.windows = math.ceil(2./self.step)
 
         self.layers = nn.Sequential(
-            OrderedDict(
-                {
-                    'lin1': torch.nn.Linear(self.windows, self.windows),
-                    'sig1': nn.Tanh(),
-                    # 'lin2': torch.nn.Linear(self.windows*2, self.windows),
-                    # 'sig2': nn.Tanh(),
-                    'lin3': nn.Linear(self.windows, 1, bias=False),
-                    'tanh': nn.Tanh()
-                }
-            )
+            nn.Linear(self.windows, 128, bias=False),
+            nn.ReLU(),
+            nn.Linear(128, 64, bias=False),
+            nn.Tanh(),
+            nn.Linear(64, 32, bias=False),
+            nn.Tanh(),
+            nn.Linear(32, 1, bias=False),
+            nn.ReLU(),
         )
+        self.x = x
+
 
         self.linear = nn.Linear(x.shape[1], 16, bias=False)
 
         self.dist = torch.nn.functional.pdist
 
         self.outputs = {}
-
-        # self.layers[0].register_forward_hook(self.get_activation('lin1'))
-        # self.layers[2].register_forward_hook(self.get_activation('lin2'))
-        # self.sim.register_forward_hook(self.get_activation('sim'))
 
     def get_activation(self, name):
         def hook(module, input, output):
@@ -160,25 +134,12 @@ class SpectralSimilarityEncoder(torch.nn.Module):
 
     def loss(self, a_hat, a, mask=None):
         a_hat = a_hat.squeeze()
-        # negative_mask = self.sample_negative_edge_mask(self.data.edge_index)
-        # positive_mask = a > 0
-        # masked_a_hat = torch.relu(a_hat).where(negative_mask.logical_or(positive_mask), torch.zeros(1, device=device)).triu(diagonal=1)
-        # masked_a = torch.zeros_like(a, device=device).where(positive_mask.logical_and(negative_mask.logical_not()), torch.relu(a).triu(diagonal=1))
-        # return F.mse_loss(masked_a_hat, masked_a)
         if mask is not None:
             masked_a = a[mask][:,mask]
             masked_a_hat = a_hat[mask][:,mask]
             return F.mse_loss(masked_a_hat, masked_a)
         else:
             return F.mse_loss(a_hat, a)
-
-    def sample_negative_edge_mask(self, edge_index):
-        positive_edges = edge_index.shape[1]
-        negative_edges = negative_sampling(edge_index, num_nodes=self.data.num_nodes, method="sparse",
-                                           num_neg_samples=positive_edges, force_undirected=True)
-        mask = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool().index_put((negative_edges[0], negative_edges[1]),
-                                                                   torch.tensor(True, device=device))
-        return mask
 
     def explain(self, target):
         explainer = shap.explainers.Permutation(self(), target)
@@ -195,12 +156,8 @@ class LowPassSimilarityEncoder(torch.nn.Module):
         self.D = torch.eye(data.num_nodes, data.num_nodes, device=device) - L
         self.data = data
         self.x = x
-
         self.dist = torch.nn.functional.pdist
-
         self.outputs = {}
-
-        # self.sim.register_forward_hook(self.get_activation('sim'))
 
     def get_activation(self, name):
         def hook(module, input, output):
@@ -219,11 +176,6 @@ class LowPassSimilarityEncoder(torch.nn.Module):
         pass
 
     def loss(self, a_hat, a, mask=None):
-        # negative_mask = self.sample_negative_edge_mask(self.data.edge_index)
-        # positive_mask = a > 0
-        # masked_a_hat = torch.relu(a_hat).where(negative_mask.logical_or(positive_mask), torch.zeros(1, device=device)).triu(diagonal=1)
-        # masked_a = torch.zeros_like(a, device=device).where(positive_mask.logical_and(negative_mask.logical_not()), torch.relu(a).triu(diagonal=1))
-        # return F.mse_loss(masked_a_hat, masked_a)
         if mask is not None:
             masked_a = a[mask][:,mask]
             masked_a_hat = a_hat[mask][:,mask]
@@ -231,10 +183,3 @@ class LowPassSimilarityEncoder(torch.nn.Module):
         else:
             return F.mse_loss(a_hat, a)
 
-    def sample_negative_edge_mask(self, edge_index):
-        positive_edges = edge_index.shape[1]
-        negative_edges = negative_sampling(edge_index, num_nodes=self.data.num_nodes, method="sparse",
-                                           num_neg_samples=positive_edges, force_undirected=True)
-        mask = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool().index_put((negative_edges[0], negative_edges[1]),
-                                                                   torch.tensor(True, device=device))
-        return mask

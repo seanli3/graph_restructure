@@ -334,7 +334,8 @@ def test():
         print('')
 
 # This new rational approximator does not show any advatanges so far
-def create_filter_new(laplacian, step, num_nodes, order=4):
+def create_filter(laplacian, step, order=2):
+    num_nodes = laplacian.shape[0]
     offset = torch.arange(0, 2, step, device=device).view(-1, 1, 1)
     a = 1/step
     tmp = 2*a*laplacian - torch.eye(num_nodes, device=device)*(2*a*offset + 1)
@@ -354,7 +355,7 @@ def create_filter_new(laplacian, step, num_nodes, order=4):
         res = res.pow(-1)
     return res.float()
 
-def create_filter(laplacian, step):
+def create_filter_old(laplacian, step):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))
     part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(
         0, 2.1, step, device=device
