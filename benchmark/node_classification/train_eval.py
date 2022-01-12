@@ -9,9 +9,9 @@ import numpy as np
 from tqdm import tqdm
 from dataset.datasets import get_dataset
 from models.encoder_node_classification import Rewirer
-from config import USE_CUDA, SEED
+from config import USE_CUDA, SEED, DEVICE
 
-device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
+device = DEVICE
 
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True,
@@ -50,7 +50,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                                   transform=lambda d:rewirer.rewire(d, model_indices,edge_per)
                                   )
 
-        if device == torch.device('cuda'):
+        if USE_CUDA:
             torch.cuda.synchronize()
 
         data = dataset[0]

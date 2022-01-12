@@ -6,10 +6,10 @@ from torch import nn
 import torch.nn.functional as F
 import shap
 from .utils import create_filter
-from config import USE_CUDA
+from config import USE_CUDA, DEVICE
 import itertools
 
-device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
+device = DEVICE
 
 
 def cosine_sim(a):
@@ -36,6 +36,7 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
                 [nn.Linear(layer_size[l], layer_size[l + 1], bias=False)] for l in range(len(layers))
             ]))
         )
+        self.layers.to(device)
         self.outputs = {}
         self.x = data.x
         self.data = data
@@ -93,6 +94,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             nn.Linear(32, 1, bias=False),
             nn.ReLU(),
         )
+        self.layers.to(device)
         self.x = x
 
 

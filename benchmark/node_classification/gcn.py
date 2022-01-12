@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from config import USE_CUDA
+from config import USE_CUDA, DEVICE
 from random import seed as rseed
 from numpy.random import seed as nseed
 from pathlib import Path
@@ -33,9 +33,9 @@ rseed(args.seed)
 nseed(args.seed)
 torch.manual_seed(args.seed)
 
-device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
+device = DEVICE
 
-if device == torch.device('cuda'):
+if USE_CUDA:
     print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(args.seed)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')

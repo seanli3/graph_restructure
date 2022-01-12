@@ -9,13 +9,13 @@ from models.autoencoders import NodeFeatureSimilarityEncoder, SpectralSimilarity
 import math
 from tqdm import tqdm
 import argparse
-from config import SAVED_MODEL_DIR_NODE_CLASSIFICATION, USE_CUDA, SEED
+from config import SAVED_MODEL_DIR_NODE_CLASSIFICATION, USE_CUDA, SEED, DEVICE
 from copy import deepcopy
 from torch_geometric.utils import remove_self_loops, to_dense_adj
 from torch_scatter import scatter_add
 
 
-device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
+device = DEVICE
 
 def get_normalized_adj(edge_index, edge_weight, num_nodes):
     edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
@@ -416,7 +416,7 @@ class Rewirer(torch.nn.Module):
         #                             (dataset[0].num_nodes, dataset[0].num_nodes), device=device)\
         #     .to_dense()
         with torch.no_grad():
-            a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes)
+            a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
             # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
             # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
             for model in map(self.models.__getitem__, model_indices):
@@ -425,7 +425,7 @@ class Rewirer(torch.nn.Module):
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
                 a = a + a_hat
-            a += torch.eye(a.shape[1], a.shape[1])*-9e9
+            a += torch.eye(a.shape[1], a.shape[1], device=device)*-9e9
             # print(a.min(), a.max())
             # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
             new_dataset = deepcopy(dataset)
@@ -464,13 +464,13 @@ class Rewirer(torch.nn.Module):
                         # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                         # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
                         a += a_hat
-                    a += torch.eye(a.shape[1], a.shape[1])*-9e9
+                    a += torch.eye(a.shape[1], a.shape[1], device=device)*-9e9
                     v, idx = torch.topk(a, n_edges, dim=1)
                     edges = []
                     for i in range(idx.shape[1]):
                         edges += list(zip(range(dataset[0].num_nodes), idx[:,i].cpu().tolist()))
                     edges = torch.tensor(edges).T
-                    dir_g = torch.sparse_coo_tensor(edges, torch.ones(edges.shape[1]), (dataset[0].num_nodes, dataset[0].num_nodes)).to_dense()
+                    dir_g = torch.sparse_coo_tensor(edges, torch.ones(edges.shape[1], device=device), (dataset[0].num_nodes, dataset[0].num_nodes)).to_dense()
                     undir_g = dir_g + dir_g.T
 
                     edges = undir_g.nonzero().T
@@ -537,7 +537,7 @@ class Rewirer(torch.nn.Module):
             cluster_ids_x, cluster_centers = kmeans(
                 X=x, num_clusters=num_classes, distance='cosine', device=device
             )
-            predicted = torch.zeros_like(cluster_ids_x)
+            predicted = torch.zeros_like(cluster_ids_x, device=device)
             y = self.data.y
             train_mask = self.data.train_mask[:, split] if split is not None else data.train_mask
             val_mask = self.data.val_mask[:, split] if split is not None else data.val_mask

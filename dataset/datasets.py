@@ -5,9 +5,9 @@ from ogb.nodeproppred import PygNodePropPredDataset
 import torch_geometric.transforms as T
 from torch_geometric.utils import add_self_loops, remove_self_loops
 from torch_geometric.utils import is_undirected, to_undirected
-from config import USE_CUDA
+from config import USE_CUDA, DEVICE
 
-device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
+device = DEVICE
 
 
 def get_dataset(name, normalize_features=False, transform=None,
@@ -59,13 +59,12 @@ def get_dataset(name, normalize_features=False, transform=None,
     if hasattr(dataset, '_data_list'):
         del dataset._data_list
 
+    dataset.data.to(device)
+    if hasattr(dataset, '_data_list') and dataset._data_list:
+        for d in dataset._data_list:
+            d.to(device)
+
     if transform:
         dataset = transform(dataset)
-
-    if device == torch.device('cuda'):
-        dataset.data.to('cuda')
-        if hasattr(dataset, '_data_list') and dataset._data_list:
-            for d in dataset._data_list:
-                d.to('cuda')
 
     return dataset

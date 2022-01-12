@@ -5,11 +5,11 @@ import numpy as np
 import torch
 from numpy.random import seed as nseed
 from torch_geometric.utils import get_laplacian
-from config import USE_CUDA
+from config import USE_CUDA, DEVICE
 from torch_scatter import scatter_add
 from torch_geometric.utils import remove_self_loops
 
-device = torch.device('cuda') if torch.cuda.is_available() and USE_CUDA else torch.device('cpu')
+device = DEVICE
 
 
 def compat_matrix_edge_idx(edge_idx, labels):
@@ -265,7 +265,7 @@ def encode_y_to_arr(data, vocab2idx, max_seq_len):
     '''
     Input:
         data: PyG graph object
-        output: add y_arr to data 
+        output: add y_arr to data
     '''
 
     # PyG >= 1.5.0

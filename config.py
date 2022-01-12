@@ -1,4 +1,5 @@
 from pathlib import Path
+import torch
 import os
 
 path = Path(__file__).parent
@@ -15,4 +16,12 @@ OGB_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION = SAVED_MODEL_DIR_NODE_CLASSIFICATION 
 USE_CUDA = True
 EDGE_LOGIT_THRESHOLD = 0.5
 SEED=729
+
+DEVICE = 'cpu'
+if USE_CUDA and torch.cuda.is_available():
+    import torch
+    device = os.getenv('CUDA_DEVICE')
+    if device is None:
+        device = '0'
+    DEVICE = torch.device('cuda:'+device)
 
