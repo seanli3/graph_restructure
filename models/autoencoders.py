@@ -64,11 +64,11 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
     def loss(self, a_hat, a, mask=None):
         a_hat = a_hat.squeeze()
         if mask is not None:
-            masked_a = a[mask][:,mask]
-            masked_a_hat = a_hat[mask][:,mask]
+            masked_a = a.triu()[mask][:,mask]
+            masked_a_hat = a_hat.triu()[mask][:,mask]
             return F.mse_loss(masked_a_hat, masked_a)
         else:
-            return F.mse_loss(a_hat, a)
+            return F.mse_loss(a_hat.triu(), a.triu())
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
@@ -137,11 +137,11 @@ class SpectralSimilarityEncoder(torch.nn.Module):
     def loss(self, a_hat, a, mask=None):
         a_hat = a_hat.squeeze()
         if mask is not None:
-            masked_a = a[mask][:,mask]
-            masked_a_hat = a_hat[mask][:,mask]
+            masked_a = a.triu()[mask][:,mask]
+            masked_a_hat = a_hat.triu()[mask][:,mask]
             return F.mse_loss(masked_a_hat, masked_a)
         else:
-            return F.mse_loss(a_hat, a)
+            return F.mse_loss(a_hat.triu(), a.triu())
 
     def explain(self, target):
         explainer = shap.explainers.Permutation(self(), target)
@@ -179,9 +179,9 @@ class LowPassSimilarityEncoder(torch.nn.Module):
 
     def loss(self, a_hat, a, mask=None):
         if mask is not None:
-            masked_a = a[mask][:,mask]
-            masked_a_hat = a_hat[mask][:,mask]
+            masked_a = a.triu()[mask][:,mask]
+            masked_a_hat = a_hat.triu()[mask][:,mask]
             return F.mse_loss(masked_a_hat, masked_a)
         else:
-            return F.mse_loss(a_hat, a)
+            return F.mse_loss(a_hat.triu(), a.triu())
 

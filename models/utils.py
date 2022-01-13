@@ -88,16 +88,26 @@ def our_homophily_measure(edge_index, label):
     c = label.max()+1
     H = compat_matrix_edge_idx(edge_index, label)
     nonzero_label = label[label >= 0]
-    counts = nonzero_label.unique(return_counts=True)[1]
+    counts = nonzero_label.unique(return_counts=True)[1].float()
     num_nodes = label.shape[0]
 
     h = 0
     scale_factor = 1
+
+    complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
+    complete_graph_edges = complete_graph_edges + torch.diag(counts)
+    num_edges = edge_index.shape[1]
+    density = 2*num_edges/num_nodes/(num_nodes+1)
+    scaler = 2
     for k in range(c):
         h_homo = H[k, k]*2/(counts[k]*(counts[k]+1))
-        h_hete = (H[k].sum() - H[k, k])/(counts[k]*(num_nodes - counts[k]))
-        h += torch.tanh(scale_factor * h_homo) - torch.tanh(scale_factor * h_hete)
-    return h/c
+        h_hete = H[k] / complete_graph_edges[k]
+        h_hete[k] = 0
+        h_hete = h_hete.max()
+        # complete_k_density = complete_graph_edges[k, k]/complete_graph_edges[k].sum()
+        # k_density = H[k, k]/num_edges
+        h += max(h_hete, h_homo)*(h_homo-h_hete)/density
+    return 1/(1+torch.exp(-scaler*h/c))
     # complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
     # # complete_graph_edges = complete_graph_edges - torch.diag(counts)
     # complete_graph_edges = complete_graph_edges + torch.diag(counts)

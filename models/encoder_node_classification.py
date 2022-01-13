@@ -495,7 +495,7 @@ class Rewirer(torch.nn.Module):
             yi = []
             ori_homo = our_homophily_measure(dataset[0].edge_index, dataset[0].y).item()
 
-            for edge_per in torch.arange(0.05, 700, 10):
+            for edge_per in torch.arange(0.05, 2, 0.05):
                 a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
                 for model in map(self.models.__getitem__, model_indices):
                     model.to(device)

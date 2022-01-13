@@ -18,4 +18,4 @@ for split in range(splits):
         split=split if has_splits else None
     )
     rewirer.load()
-    rewirer.plot_homophily(dataset, [2], split)
+    rewirer.plot_homophily(dataset, [2])
