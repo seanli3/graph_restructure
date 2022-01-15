@@ -62,7 +62,8 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
         self.layers.to(device)
 
     def loss(self, a_hat, a, mask=None):
-        a_hat = a_hat.squeeze()
+        a_hat = a_hat.squeeze().clip(min=0)
+        a = a.squeeze().clip(min=0)
         if mask is not None:
             masked_a = a.triu()[mask][:,mask]
             masked_a_hat = a_hat.triu()[mask][:,mask]
@@ -135,7 +136,8 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         self.layers.to(device)
 
     def loss(self, a_hat, a, mask=None):
-        a_hat = a_hat.squeeze()
+        a_hat = a_hat.squeeze().clip(min=0)
+        a = a.squeeze().clip(min=0)
         if mask is not None:
             masked_a = a.triu()[mask][:,mask]
             masked_a_hat = a_hat.triu()[mask][:,mask]
@@ -178,6 +180,8 @@ class LowPassSimilarityEncoder(torch.nn.Module):
         pass
 
     def loss(self, a_hat, a, mask=None):
+        a_hat = a_hat.squeeze().clip(min=0)
+        a = a.squeeze().clip(min=0)
         if mask is not None:
             masked_a = a.triu()[mask][:,mask]
             masked_a_hat = a_hat.triu()[mask][:,mask]

@@ -54,16 +54,11 @@ def get_random_signals(num_nodes, size=None, epsilon=0.25):
     return random_signal
 
 
-def create_label_sim_matrix(data, mask):
+def create_label_sim_matrix(data):
     community = torch.zeros(data.num_nodes, data.num_nodes, device=device)
     for c in range(dataset.num_classes):
-        index = (data.y == c).logical_and(mask).nonzero().view(-1).tolist()
-        indices = torch.tensor(list(combinations(index, 2))).T
-        if len(indices) > 0:
-            community.index_put_((indices[0], indices[1]), torch.tensor(1.0, device=device))
-            community.index_put_((indices[1], indices[0]), torch.tensor(1.0, device=device))
-            community.fill_diagonal_(1)
-    return community
+        community = community + (data.y ==c).float().view(-1, 1).mm((data.y ==c).float().view(1, -1))
+    return community.where(community>0, torch.tensor(-1.).to(device))
 
 
 def get_masked_edges(adj, mask):
@@ -92,7 +87,8 @@ class Rewirer(torch.nn.Module):
         if self.mode == 'supervised':
             train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
             val_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
-            self.train_supervised(epochs, lr, weight_decay, patience, step, train_mask, val_mask)
+            # self.train_supervised(epochs, lr, weight_decay, patience, step, train_mask, val_mask)
+            self.train_supervised_alt(epochs, lr, weight_decay, patience, step, train_mask, val_mask)
         elif self.mode == 'kmeans':
             train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
             val_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
@@ -102,10 +98,106 @@ class Rewirer(torch.nn.Module):
         elif self.mode == 'vae':
             self.train_vae(epochs, lr, weight_decay, patience, step)
 
+    def train_supervised_alt(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask):
+        data = self.data
+        community = create_label_sim_matrix(data)
+        train_community_mask = train_mask.float().view(-1, 1).mm(train_mask.float().view(1, -1)).bool()
+        best_loss_struct = float('inf')
+        best_loss_fea = float('inf')
+
+        optimizers = [
+            torch.optim.AdamW(
+                self.fea_sim_model.parameters(), lr=lr, weight_decay=weight_decay
+            ),
+            torch.optim.AdamW(
+                self.struct_sim_model.parameters(), lr=lr, weight_decay=weight_decay
+            ), ]
+
+        loss_struct = torch.tensor(float('inf'))
+        loss_fea = torch.tensor(float('inf'))
+        self.fea_sim_model.reset_parameters()
+        self.struct_sim_model.reset_parameters()
+
+        best_loss = float('inf')
+        bad_counter = 0
+        best_model_fea = {}
+        best_model_struct = {}
+
+        pbar = tqdm(range(0, epochs))
+
+        for epoch in pbar:
+            if epoch // 100 % 2 == 0:
+                self.struct_sim_model.eval()
+                self.fea_sim_model.train()
+                x_hat_fea = self.fea_sim_model.sim()
+
+                if epoch < 200:
+                    loss_fea = self.fea_sim_model.loss(x_hat_fea, community, train_mask)
+                else:
+                    with torch.no_grad():
+                        x_hat_struct = self.struct_sim_model.sim()
+                    self_sup_mask = (x_hat_struct > 0.9).logical_or(x_hat_struct < -0.9).logical_and(train_community_mask.logical_not())
+                    target = community.where(train_community_mask, torch.tensor(0.).to(device)) + x_hat_struct.where(self_sup_mask, torch.tensor(0.).to(device))
+                    loss_fea = self.fea_sim_model.loss(x_hat_fea, target)
+                loss_fea.backward()
+                optimizers[0].step()
+                optimizers[0].zero_grad()
+            else:
+                self.struct_sim_model.train()
+                self.fea_sim_model.eval()
+                x_hat_struct = self.struct_sim_model.sim()
+                if epoch < 200:
+                    loss_struct = self.struct_sim_model.loss(x_hat_struct, community, train_mask)
+                else:
+                    with torch.no_grad():
+                        x_hat_fea = self.fea_sim_model.sim()
+                    self_sup_mask = (x_hat_fea > 0.9).logical_or(x_hat_fea < -0.9).logical_and(self_sup_mask.logical_not())
+                    target = community.where(train_community_mask, torch.tensor(0.).to(device)) + x_hat_fea.where(self_sup_mask, torch.tensor( 0.).to( device))
+                    loss_struct = self.struct_sim_model.loss(x_hat_struct, target)
+                loss_struct.backward()
+                optimizers[1].step()
+                optimizers[1].zero_grad()
+
+            pbar.set_description('Epoch: {}, fea loss: {:.3f}, struct loss: {:.3f}' \
+                                 .format(epoch, loss_fea.item(), loss_struct.item()))
+
+            if loss_fea < best_loss_fea:
+                best_model_fea['train_loss'] = best_loss_fea
+                best_model_fea['loss'] = best_loss_fea
+                best_model_fea['epoch'] = epoch
+                best_model_fea['step'] = step
+                best_model_fea['model'] = deepcopy(self.fea_sim_model.state_dict())
+                best_loss_fea = loss_fea
+                bad_counter = 0
+                torch.save(
+                    best_model_fea, SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}'.format(
+                        self.DATASET.lower(), self.mode, self.fea_sim_model.name
+                    ) + '.pt'
+                )
+            elif loss_struct < best_loss_struct:
+                best_model_struct['train_loss'] = best_loss_struct
+                best_model_struct['loss'] = best_loss_struct
+                best_model_struct['epoch'] = epoch
+                best_model_struct['step'] = step
+                best_model_struct['model'] = deepcopy(self.struct_sim_model.state_dict())
+                best_loss_struct = loss_struct
+                bad_counter = 0
+                torch.save(
+                    best_model_struct, SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}'.format(
+                        self.DATASET.lower(), self.mode, self.struct_sim_model.name
+                    ) + '.pt'
+                )
+            else:
+                bad_counter += 1
+                if bad_counter == patience:
+                    break
+
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
     def train_supervised(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask):
         data = self.data
-        community = create_label_sim_matrix(data, train_mask)
-        val_community = create_label_sim_matrix(data, val_mask)
+        community = create_label_sim_matrix(data)
 
         for model in self.models:
             model.reset_parameters()
@@ -129,7 +221,7 @@ class Rewirer(torch.nn.Module):
                     optimizer.step()
 
                 model.eval()
-                val_loss = model.loss(x_hat, val_community, val_mask)
+                val_loss = model.loss(x_hat, community, val_mask)
                 pbar.set_description('Epoch: {}, loss: {:.3f} val loss: {:.3f}'.format(epoch, loss.item(), val_loss.item()))
 
                 if val_loss < best_loss:
@@ -164,8 +256,7 @@ class Rewirer(torch.nn.Module):
 
     def train_supervised_kmeans(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask):
         data = self.data
-        community = create_label_sim_matrix(data, train_mask)
-        val_community = create_label_sim_matrix(data, val_mask)
+        community = create_label_sim_matrix(data)
 
         for model in self.models[1:]:
             model.reset_parameters()
@@ -189,7 +280,7 @@ class Rewirer(torch.nn.Module):
                     optimizer.step()
 
                 model.eval()
-                val_loss = model.loss(x_hat, val_community, val_mask)
+                val_loss = model.loss(x_hat, community, val_mask)
                 train_acc, val_acc, test_acc = self.kmeans([self.models.index(model)], self.split)
                 pbar.set_description(
                     'Epoch: {}, loss: {:.3f} val loss: {:.3f} train acc {:.3f}, val acc {:.3f}, test acc {:.3f}'.format(
@@ -454,7 +545,7 @@ class Rewirer(torch.nn.Module):
                 if n_edges == 0:
                     edges = torch.tensor([[]])
                 else:
-                    a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes)
+                    a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
                     # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
 
                     # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
@@ -469,7 +560,7 @@ class Rewirer(torch.nn.Module):
                     edges = []
                     for i in range(idx.shape[1]):
                         edges += list(zip(range(dataset[0].num_nodes), idx[:,i].cpu().tolist()))
-                    edges = torch.tensor(edges).T
+                    edges = torch.tensor(edges, device=device).T
                     dir_g = torch.sparse_coo_tensor(edges, torch.ones(edges.shape[1], device=device), (dataset[0].num_nodes, dataset[0].num_nodes)).to_dense()
                     undir_g = dir_g + dir_g.T
 
@@ -482,10 +573,13 @@ class Rewirer(torch.nn.Module):
                       " edges after: ", edges.shape[1], 'homophily before:', ori_homo,
                       'homophily after:', new_homophily)
                 xi.append(n_edges)
-                yi.append(new_homophily)
+                yi.append(new_homophily.cpu())
             from matplotlib import pyplot as plt
+            yi = torch.tensor(yi)
+            gradient = yi[1:] - yi[:-1]
             plt.plot(xi, yi)
-            plt.axhline(y=ori_homo, color='r', linestyle='-')
+            plt.plot(xi[:-1], gradient)
+            plt.axhline(y=ori_homo.cpu(), color='r', linestyle='-')
             plt.title(dataset.name + ", model indices:" + str(model_indices))
             plt.show()
 
@@ -495,15 +589,16 @@ class Rewirer(torch.nn.Module):
             yi = []
             ori_homo = our_homophily_measure(dataset[0].edge_index, dataset[0].y).item()
 
-            for edge_per in torch.arange(0.05, 2, 0.05):
-                a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
+            for edge_per in torch.arange(0.1, 10, 0.1):
+                # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
+                a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
                 for model in map(self.models.__getitem__, model_indices):
                     model.to(device)
                     a_hat = model.sim().squeeze()
                     # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
                     # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                     # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
-                    a = a * a_hat
+                    a = a + a_hat
                 a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
                 # print(a.min(), a.max())
                 # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
@@ -521,7 +616,10 @@ class Rewirer(torch.nn.Module):
                 xi.append(edge_per.item())
                 yi.append(new_homophily.item())
             from matplotlib import pyplot as plt
+            yi = torch.tensor(yi)
+            gradient = yi[1:] - yi[:-1]
             plt.plot(xi, yi)
+            plt.plot(xi[:-1], gradient)
             plt.axhline(y=ori_homo, color='r', linestyle='-')
             plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
             plt.show()

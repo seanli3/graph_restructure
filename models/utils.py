@@ -98,7 +98,7 @@ def our_homophily_measure(edge_index, label):
     complete_graph_edges = complete_graph_edges + torch.diag(counts)
     num_edges = edge_index.shape[1]
     density = 2*num_edges/num_nodes/(num_nodes+1)
-    scaler = 2
+    scaler = 1
     for k in range(c):
         h_homo = H[k, k]*2/(counts[k]*(counts[k]+1))
         h_hete = H[k] / complete_graph_edges[k]
