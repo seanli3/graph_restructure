@@ -9,7 +9,6 @@ from config import USE_CUDA, DEVICE
 
 device = DEVICE
 
-
 def get_dataset(name, normalize_features=False, transform=None,
                 self_loop=False, features=None, split='full'):
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)

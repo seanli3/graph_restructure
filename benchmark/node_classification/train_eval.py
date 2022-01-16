@@ -15,7 +15,7 @@ device = DEVICE
 
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True,
-        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, edge_per=0.8, model_indices=[0,1]):
+        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1]):
 
     dataset = get_dataset(dataset_name, normalize_features)
     if len(dataset.data.train_mask.shape) > 1:
@@ -47,7 +47,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                 mode=rewirer_mode, split=split if has_splits else None)
             rewirer.load()
             dataset = get_dataset(dataset_name, normalize_features,
-                                  transform=lambda d:rewirer.rewire(d, model_indices,edge_per)
+                                  transform=lambda d:rewirer.rewire(d, model_indices,num_edges)
                                   )
 
         if USE_CUDA:
@@ -169,8 +169,9 @@ def train(model, optimizer, data, split=None):
     out = model(data)[0]
     mask = data.train_mask[:, split] if split is not None else data.train_mask
     loss = F.nll_loss(out[mask], data.y[mask].view(-1))
-    loss.backward()
-    optimizer.step()
+    if loss.requires_grad:
+        loss.backward()
+        optimizer.step()
 
 
 def evaluate(model, data, split=None):

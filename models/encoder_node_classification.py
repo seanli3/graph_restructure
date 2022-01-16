@@ -1,69 +1,20 @@
 import torch
 from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian, negative_sampling
+from torch_geometric.utils import negative_sampling
 import numpy as np
-from itertools import product, combinations
-from models.utils import homophily, our_homophily_measure
+from models.utils import our_homophily_measure, get_adj, get_random_signals, create_label_sim_matrix, get_normalized_adj
 from dataset.datasets import get_dataset
 from models.autoencoders import NodeFeatureSimilarityEncoder, SpectralSimilarityEncoder
-import math
 from tqdm import tqdm
 import argparse
-from config import SAVED_MODEL_DIR_NODE_CLASSIFICATION, USE_CUDA, SEED, DEVICE
+from config import SAVED_MODEL_DIR_NODE_CLASSIFICATION, USE_CUDA, DEVICE
 from copy import deepcopy
-from torch_geometric.utils import remove_self_loops, to_dense_adj
-from torch_scatter import scatter_add
-
 
 device = DEVICE
-
-def get_normalized_adj(edge_index, edge_weight, num_nodes):
-    edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
-    row, col = edge_index[0], edge_index[1]
-    if edge_weight is None:
-        edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
-    deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
-
-    # Compute A_norm = D^{-1} A.
-    deg_inv = 1.0 / deg
-    deg_inv.masked_fill_(deg_inv == float('inf'), 0)
-    edge_weight = deg_inv[row] * edge_weight
-    return to_dense_adj(edge_index, edge_attr=edge_weight).squeeze()
-
-
-def get_adj(edge_index, edge_weight, num_nodes):
-    edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
-    if edge_weight is None:
-        edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
-    return to_dense_adj(edge_index, edge_attr=edge_weight, max_num_nodes=num_nodes).squeeze()
 
 
 # random Guassian signals for simulating spectral clustering
 # epsilon - error bound
-def get_random_signals(num_nodes, size=None, epsilon=0.25):
-    if size is None:
-        random_signal_size = math.floor(
-            6 / (math.pow(epsilon, 2) / 2 - math.pow(epsilon, 3) / 3) * math.log(num_nodes)
-        )
-    else:
-        random_signal_size = size
-    random_signal = torch.normal(
-        0, math.sqrt(1 / random_signal_size), size=(num_nodes, random_signal_size),
-        device=device, generator=torch.Generator(device).manual_seed(SEED)
-    )
-    return random_signal
-
-
-def create_label_sim_matrix(data):
-    community = torch.zeros(data.num_nodes, data.num_nodes, device=device)
-    for c in range(dataset.num_classes):
-        community = community + (data.y ==c).float().view(-1, 1).mm((data.y ==c).float().view(1, -1))
-    return community.where(community>0, torch.tensor(-1.).to(device))
-
-
-def get_masked_edges(adj, mask):
-    subgraph_adj = adj[mask][:,mask]
-    return subgraph_adj.nonzero().T
 
 
 class Rewirer(torch.nn.Module):
@@ -502,13 +453,13 @@ class Rewirer(torch.nn.Module):
                 saved_model = torch.load(file_name)
                 model.load_state_dict(saved_model['model'])
 
-    def rewire(self, dataset, model_indices, edge_per):
+    def rewire(self, dataset, model_indices, num_edges):
         # a = torch.sparse_coo_tensor(dataset[0].edge_index, torch.ones(dataset[0].num_edges),
         #                             (dataset[0].num_nodes, dataset[0].num_nodes), device=device)\
         #     .to_dense()
         with torch.no_grad():
-            a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
-            # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
+            # a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
+            a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
             # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
             for model in map(self.models.__getitem__, model_indices):
                 a_hat = model.sim().squeeze()
@@ -521,7 +472,7 @@ class Rewirer(torch.nn.Module):
             # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
             new_dataset = deepcopy(dataset)
             # new_dataset.data.edge_index = (a > threshold).nonzero().T
-            v, i = torch.topk(a.flatten(), int(dataset[0].num_edges*edge_per))
+            v, i = torch.topk(a.flatten(), int(num_edges))
             edges = torch.tensor(np.array(np.unravel_index(i.cpu().numpy(), a.shape)), device=device).detach()
             print("edges before: ", dataset.data.num_edges, " edges after: ", edges.shape[1])
             print('homophily before:', our_homophily_measure(dataset[0].edge_index, dataset[0].y),
@@ -589,9 +540,9 @@ class Rewirer(torch.nn.Module):
             yi = []
             ori_homo = our_homophily_measure(dataset[0].edge_index, dataset[0].y).item()
 
-            for edge_per in torch.arange(0.1, 10, 0.1):
-                # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
-                a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
+            for num_edges in torch.arange(dataset[0].num_nodes, dataset[0].num_nodes*dataset[0].num_nodes, 5000):
+                a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
+                # a = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
                 for model in map(self.models.__getitem__, model_indices):
                     model.to(device)
                     a_hat = model.sim().squeeze()
@@ -603,23 +554,23 @@ class Rewirer(torch.nn.Module):
                 # print(a.min(), a.max())
                 # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
                 # new_dataset.data.edge_index = (a > threshold).nonzero().T
-                v, i = torch.topk(a.flatten(), int(dataset[0].num_edges * edge_per))
+                v, i = torch.topk(a.flatten(), int(num_edges))
                 edges = torch.tensor(np.array(np.unravel_index(i.cpu().numpy(), a.shape)), device=device).detach()
 
                 # new_homophily = our_homophily_measure(get_masked_edges(adj, dataset[0].val_mask[:, self.split]),
                 #                           dataset[0].y[dataset[0].val_mask[:, self.split]])
                 new_homophily = our_homophily_measure(edges, dataset[0].y)
                 print(
-                    "edge percent: ", edge_per, "edges before: ", dataset.data.num_edges, " edges after: ",
+                    "edges: ", num_edges, "edges before: ", dataset.data.num_edges, " edges after: ",
                     edges.shape[1], 'homophily before:', ori_homo, 'homophily after:', new_homophily
                     )
-                xi.append(edge_per.item())
+                xi.append(num_edges.item())
                 yi.append(new_homophily.item())
             from matplotlib import pyplot as plt
             yi = torch.tensor(yi)
             gradient = yi[1:] - yi[:-1]
             plt.plot(xi, yi)
-            plt.plot(xi[:-1], gradient)
+            # plt.plot(xi[:-1], gradient)
             plt.axhline(y=ori_homo, color='r', linestyle='-')
             plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
             plt.show()

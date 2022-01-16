@@ -14,7 +14,7 @@ for split in range(splits):
     if has_splits:
         print('Split:', split)
     rewirer = Rewirer(
-        dataset[0], DATASET=dataset.name, step=0.2, layers=[256, 128, 64], mode='supervised',
+        dataset[0], DATASET=dataset.name, step=0.1, layers=[256, 128, 64], mode='supervised',
         split=split if has_splits else None
     )
     rewirer.load()

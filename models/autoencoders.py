@@ -1,27 +1,14 @@
 import math
-from collections import OrderedDict
-from torch_geometric.utils import get_laplacian, negative_sampling
+from torch_geometric.utils import get_laplacian
 import torch
 from torch import nn
 import torch.nn.functional as F
 import shap
-from .utils import create_filter
-from config import USE_CUDA, DEVICE
+from .utils import create_filter, cosine_sim
+from config import DEVICE
 import itertools
 
 device = DEVICE
-
-
-def cosine_sim(a):
-    eps = 1e-8
-    if len(a.shape) == 2:
-        a = a.view(1, a.shape[0], a.shape[1])
-    a_n, b_n = a.norm(dim=2)[:, None], a.norm(dim=2)[:, None]
-    a_norm = a / torch.clamp(a_n, min=eps).view(a.shape[0], a.shape[1], 1)
-    b_norm = a / torch.clamp(b_n, min=eps).view(a.shape[0], a.shape[1], 1)
-    sim_mt = a_norm.matmul(b_norm.permute(0, 2, 1))
-    return sim_mt
-
 
 
 class NodeFeatureSimilarityEncoder(torch.nn.Module):

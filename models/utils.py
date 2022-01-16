@@ -4,10 +4,11 @@ from itertools import product
 import numpy as np
 import torch
 from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian
-from config import USE_CUDA, DEVICE
+from torch_geometric.utils import get_laplacian, remove_self_loops, to_dense_adj
+from config import USE_CUDA, DEVICE, SEED
 from torch_scatter import scatter_add
 from torch_geometric.utils import remove_self_loops
+from config import DEVICE
 
 device = DEVICE
 
@@ -85,29 +86,22 @@ def our_homophily_measure(edge_index, label):
     treats negative labels as unlabeled
     """
     label = label.squeeze()
-    c = label.max()+1
     H = compat_matrix_edge_idx(edge_index, label)
     nonzero_label = label[label >= 0]
     counts = nonzero_label.unique(return_counts=True)[1].float()
-    num_nodes = label.shape[0]
-
-    h = 0
-    scale_factor = 1
-
-    complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
-    complete_graph_edges = complete_graph_edges + torch.diag(counts)
     num_edges = edge_index.shape[1]
+    num_nodes = label.shape[0]
     density = 2*num_edges/num_nodes/(num_nodes+1)
-    scaler = 1
-    for k in range(c):
-        h_homo = H[k, k]*2/(counts[k]*(counts[k]+1))
-        h_hete = H[k] / complete_graph_edges[k]
-        h_hete[k] = 0
-        h_hete = h_hete.max()
-        # complete_k_density = complete_graph_edges[k, k]/complete_graph_edges[k].sum()
-        # k_density = H[k, k]/num_edges
-        h += max(h_hete, h_homo)*(h_homo-h_hete)/density
-    return 1/(1+torch.exp(-scaler*h/c))
+    complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
+    complete_graph_edges = complete_graph_edges - torch.diag(counts)
+    h = H/complete_graph_edges
+    h_homo = h.diag().min()
+    h_hete = h.triu(1).max()
+    # ret = max(h_hete, h_homo) * (h_homo - h_hete) / density
+    # return 1 / (1 + torch.exp(- ret))
+    return (h_homo - h_hete).mean()/2+0.5
+
+
     # complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
     # # complete_graph_edges = complete_graph_edges - torch.diag(counts)
     # complete_graph_edges = complete_graph_edges + torch.diag(counts)
@@ -579,6 +573,64 @@ def rewire_graph(model, dataset, keep_num_edges=False, threshold=None):
     return dataset
 
 
+def get_normalized_adj(edge_index, edge_weight, num_nodes):
+    edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
+    row, col = edge_index[0], edge_index[1]
+    if edge_weight is None:
+        edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
+    deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
+
+    # Compute A_norm = D^{-1} A.
+    deg_inv = 1.0 / deg
+    deg_inv.masked_fill_(deg_inv == float('inf'), 0)
+    edge_weight = deg_inv[row] * edge_weight
+    return to_dense_adj(edge_index, edge_attr=edge_weight, max_num_nodes=num_nodes).squeeze()
+
+
+def get_adj(edge_index, edge_weight, num_nodes):
+    edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
+    if edge_weight is None:
+        edge_weight = torch.ones(edge_index.size(1), device=edge_index.device)
+    return to_dense_adj(edge_index, edge_attr=edge_weight, max_num_nodes=num_nodes).squeeze()
+
+
+def get_random_signals(num_nodes, size=None, epsilon=0.25):
+    if size is None:
+        random_signal_size = math.floor(
+            6 / (math.pow(epsilon, 2) / 2 - math.pow(epsilon, 3) / 3) * math.log(num_nodes)
+        )
+    else:
+        random_signal_size = size
+    random_signal = torch.normal(
+        0, math.sqrt(1 / random_signal_size), size=(num_nodes, random_signal_size),
+        device=device, generator=torch.Generator(device).manual_seed(SEED)
+    )
+    return random_signal
+
+
+def create_label_sim_matrix(data):
+    community = torch.zeros(data.num_nodes, data.num_nodes, device=device)
+    for c in range(data.y.max() + 1):
+        community = community + (data.y ==c).float().view(-1, 1).mm((data.y ==c).float().view(1, -1))
+    return community.where(community>0, torch.tensor(-1.).to(device))
+
+
+def get_masked_edges(adj, mask):
+    subgraph_adj = adj[mask][:,mask]
+    return subgraph_adj.nonzero().T
+
+
+
 if __name__ == '__main__':
     test()
 
+
+def cosine_sim(a):
+    eps = 1e-8
+    if len(a.shape) == 2:
+        a = a.view(1, a.shape[0], a.shape[1])
+    a_n, b_n = a.norm(dim=2)[:, None], a.norm(dim=2)[:, None]
+    a_norm = a / torch.clamp(a_n, min=eps).view(a.shape[0], a.shape[1], 1)
+    b_norm = a / torch.clamp(b_n, min=eps).view(a.shape[0], a.shape[1], 1)
+    sim_mt = a_norm.matmul(b_norm.permute(0, 2, 1))
+    return sim_mt
