@@ -93,7 +93,7 @@ def our_homophily_measure(edge_index, label):
     num_nodes = label.shape[0]
     density = 2*num_edges/num_nodes/(num_nodes+1)
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
-    complete_graph_edges = complete_graph_edges - torch.diag(counts)
+    complete_graph_edges = complete_graph_edges + torch.diag(counts)
     h = H/complete_graph_edges
     h_homo = h.diag().min()
     h_hete = h.triu(1).max()

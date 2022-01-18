@@ -4,8 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import SGConv
 from random import seed as rseed
 from numpy.random import seed as nseed
-
-from webkb import get_dataset, run
+from benchmark.node_classification.train_eval import run
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
@@ -18,10 +17,13 @@ parser.add_argument('--weight_decay', type=float, default=0.0005)
 parser.add_argument('--patience', type=int, default=10)
 parser.add_argument('--normalize_features', type=bool, default=False)
 parser.add_argument('--K', type=int, default=2)
-parser.add_argument('--edge_dropout', type=float, default=0)
-parser.add_argument('--lcc', type=bool, default=False)
-parser.add_argument('--node_feature_dropout', type=float, default=0)
-parser.add_argument('--dissimilar_t', type=float, default=1)
+parser.add_argument('--rewired', action='store_true')
+parser.add_argument('--num_edges', type=float, default=3000)
+parser.add_argument('--rewirer_mode', type=str, default='supervised')
+parser.add_argument('--rewirer_step', type=float, default=0.2)
+parser.add_argument('--run_split', type=int, default=None)
+parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
+
 args = parser.parse_args()
 
 
@@ -44,10 +46,6 @@ class Net(torch.nn.Module):
         x = self.conv1(x, edge_index)
         return F.log_softmax(x, dim=1), None
 
-permute_masks = None
 
-use_dataset = lambda : get_dataset(args.dataset, args.normalize_features, edge_dropout=args.edge_dropout,
-                                    permute_masks=permute_masks, lcc=args.lcc,
-                                    node_feature_dropout=args.node_feature_dropout, dissimilar_t=args.dissimilar_t)
-
-run(use_dataset, Net, args.runs, args.epochs, args.lr, args.weight_decay, args.patience)
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, run_split=args.run_split,
+    num_edges=args.num_edges, model_indices=args.model_indices, rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step)

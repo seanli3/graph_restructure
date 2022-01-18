@@ -98,9 +98,6 @@ def run(name, Model, epochs, lr, weight_decay, patience, step):
                 if bad_counter == patience:
                     break
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-
     return eval_info_early_model
 
 

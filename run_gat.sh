@@ -1,0 +1,13 @@
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=34277 --run_split=9
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=34277 --run_split=8
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=26277 --run_split=7
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=42277 --run_split=6
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=46277 --run_split=5
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=30277 --run_split=4
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=42277 --run_split=3
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=46277 --run_split=2
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=30277 --run_split=1
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=chameleon --rewired --rewirer_step=0.1 --dropout=0.3 --hidden=128 --model_indices 0 --num_edges=30277 --run_split=0
+
+#CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=squirrel --rewired --rewirer_step=0.1 --dropout=0.4 --model_indices 0 --num_edges=17336 --hidden=128 --heads=8
+CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gat --dataset=citeseer --rewired --rewirer_step=0.1 --dropout=0.4 --model_indices 0 --num_edges=16076 --hidden=256 --heads=8 --runs=10

@@ -1,5 +1,7 @@
 from dataset.datasets import get_dataset
 from models.encoder_node_classification import Rewirer
+from models.utils import device
+import torch
 
 dataset = get_dataset('cora', True)
 
@@ -18,4 +20,4 @@ for split in range(splits):
         split=split if has_splits else None
     )
     rewirer.load()
-    rewirer.plot_homophily(dataset, [1])
+    rewirer.plot_homophily(dataset, [0], torch.ones_like(dataset[0].val_mask, device=device).bool())

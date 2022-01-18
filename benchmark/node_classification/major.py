@@ -27,6 +27,7 @@ parser.add_argument('--rewirer_step', type=float, default=0.2)
 parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
 parser.add_argument('--num_edges', type=float, default=3000)
 parser.add_argument('--rewirer_mode', type=str, default='supervised')
+parser.add_argument('--run_split', type=int, default=None)
 args = parser.parse_args()
 
 
@@ -39,7 +40,6 @@ device = DEVICE
 if USE_CUDA:
     print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(args.seed)
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
 class Net(torch.nn.Module):
@@ -51,7 +51,7 @@ class Net(torch.nn.Module):
         pass
 
     def forward(self, data):
-        x, edge_index, train_mask, y = data.x, data.adj_t if hasattr(data, 'adj_t') else data.edge_index, data.train_mask, data.y
+        x, edge_index, train_mask, y = data.x, data.adj_t if hasattr(data, 'adj_t') else data.edge_index, data.train_mask[:, args.run_split], data.y
         edge_weight = None
         label = torch.nn.functional.one_hot(y)
         train_label = label.float()
@@ -59,7 +59,7 @@ class Net(torch.nn.Module):
         norm_adj = get_normalized_adj(edge_index, edge_weight, x.shape[0])
 
         bad_counter = 0
-        pre_nodes_without_labels_fea = torch.nan
+        pre_nodes_without_labels_fea = torch.tensor(math.nan, device=device)
         fea_bad_counter = 0
         threshold = 0.5
         nodes_without_labels = x.shape[0] - train_mask.count_nonzero()
@@ -86,7 +86,7 @@ class Net(torch.nn.Module):
                 sim = cosine_sim(x).squeeze().fill_diagonal_(0)
                 unknown_labels = train_label[sim.argmax(1)]
                 if pre_nodes_without_labels_fea == nodes_without_labels.float():
-                    sim = sim.where(sim < threshold, torch.tensor(threshold-0.1))
+                    sim = sim.where(sim < threshold, torch.tensor(threshold-0.1, device=device))
                     threshold -= 0.1
                 else:
                     threshold = 0.5
@@ -101,5 +101,5 @@ class Net(torch.nn.Module):
         return train_label, x
 
 
-run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, run_split=args.run_split,
     num_edges=args.num_edges, model_indices=args.model_indices, rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step)

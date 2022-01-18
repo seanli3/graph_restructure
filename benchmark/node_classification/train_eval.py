@@ -14,19 +14,19 @@ from config import USE_CUDA, SEED, DEVICE
 device = DEVICE
 
 
-def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True,
+def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, run_split=None,
         rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1]):
 
     dataset = get_dataset(dataset_name, normalize_features)
     if len(dataset.data.train_mask.shape) > 1:
-        splits = dataset.data.train_mask.shape[1]
+        splits = [run_split] if run_split is not None else range(dataset.data.train_mask.shape[1])
         has_splits = True
     else:
-        splits = 1
+        splits = [1]
         has_splits = False
 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, durations = [], [], [], [], [], []
-    for split in range(splits):
+    for split in splits:
         from random import seed as rseed
         from numpy.random import seed as nseed
         rseed(SEED)
@@ -49,9 +49,6 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
             dataset = get_dataset(dataset_name, normalize_features,
                                   transform=lambda d:rewirer.rewire(d, model_indices,num_edges)
                                   )
-
-        if USE_CUDA:
-            torch.cuda.synchronize()
 
         data = dataset[0]
 
@@ -94,9 +91,6 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                     bad_counter += 1
                     if bad_counter == patience:
                         break
-
-            if device == torch.device('cuda'):
-                torch.cuda.synchronize()
 
             t_end = time.perf_counter()
             durations.append(t_end - t_start)

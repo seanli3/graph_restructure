@@ -19,6 +19,7 @@ parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--weight_decay', type=float, default=0.0005)
 parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--hidden', type=int, default=64)
+parser.add_argument('--run_split', type=int, default=None)
 parser.add_argument('--dropout', type=float, default=0.9)
 parser.add_argument('--normalize_features', type=bool, default=True)
 parser.add_argument('--rewired', action='store_true')
@@ -38,7 +39,6 @@ device = DEVICE
 if USE_CUDA:
     print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(args.seed)
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
 class Net(torch.nn.Module):
@@ -63,5 +63,5 @@ class Net(torch.nn.Module):
         return F.log_softmax(x, dim=1), x
 
 
-run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, run_split=args.run_split,
     num_edges=args.num_edges, model_indices=args.model_indices, rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step)

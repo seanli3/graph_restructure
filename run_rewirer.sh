@@ -1,10 +1,10 @@
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=0
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=1
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=2
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=3
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=4
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=5
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=6
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=7
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=8
-python -m models.encoder_node_classification --dataset=Actor --step=0.2 --lr=0.01 --mode=supervised --split=9
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=0
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=1
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=2
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=3
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=4
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=5
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=6
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=7
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=8
+CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m models.encoder_node_classification --dataset=actor --step=0.1 --lr=0.01 --mode=supervised --split=9

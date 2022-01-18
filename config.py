@@ -13,7 +13,7 @@ for p in [SAVED_MODEL_DIR_GRAPH_CLASSIFICATION, SAVED_MODEL_DIR_GRAPH_CLASSIFICA
 
 TU_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '{}_dataset.pt'
 OGB_SAVED_MODEL_PATH_GRAPH_CLASSIFICATION = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '{}_dataset_split_{}.pt'
-USE_CUDA = True
+USE_CUDA = False if os.getenv('CPU_ONLY') is not None else True
 EDGE_LOGIT_THRESHOLD = 0.5
 SEED=729
 
@@ -24,4 +24,5 @@ if USE_CUDA and torch.cuda.is_available():
     if device is None:
         device = '0'
     DEVICE = torch.device('cuda:'+device)
+    print('Using device:' + str(DEVICE))
 

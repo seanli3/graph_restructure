@@ -73,18 +73,14 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         self.windows = math.ceil(2./self.step)
 
         self.layers = nn.Sequential(
-            nn.Linear(self.windows, 128, bias=False),
+            nn.Linear(self.windows, 32, bias=False),
             nn.ReLU(),
-            nn.Linear(128, 64, bias=False),
+            nn.Linear(32, 16, bias=False),
             nn.Tanh(),
-            nn.Linear(64, 32, bias=False),
-            nn.Tanh(),
-            nn.Linear(32, 1, bias=False),
-            nn.ReLU(),
+            nn.Linear(16, 1, bias=False),
         )
         self.layers.to(device)
         self.x = x
-
 
         self.linear = nn.Linear(x.shape[1], 16, bias=False)
 
