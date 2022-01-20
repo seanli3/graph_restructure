@@ -26,3 +26,4 @@ if USE_CUDA and torch.cuda.is_available():
     DEVICE = torch.device('cuda:'+device)
     print('Using device:' + str(DEVICE))
 
+torch.set_num_threads(60)

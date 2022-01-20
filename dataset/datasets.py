@@ -6,6 +6,7 @@ import torch_geometric.transforms as T
 from torch_geometric.utils import add_self_loops, remove_self_loops
 from torch_geometric.utils import is_undirected, to_undirected
 from config import USE_CUDA, DEVICE
+from dataset.dataset import PygNcDataset
 
 device = DEVICE
 
@@ -31,7 +32,7 @@ def get_dataset(name, normalize_features=False, transform=None,
     elif name.lower() in ['actor']:
         dataset = Actor(path)
     else:
-        dataset = PygNodePropPredDataset(name=name, root=path, transform=T.ToSparseTensor())
+        dataset = PygNcDataset(name=name, root=path, transform=T.ToSparseTensor())
 
     dataset.data.y = dataset.data.y.long()
     if features is not None:

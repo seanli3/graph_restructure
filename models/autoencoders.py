@@ -3,7 +3,6 @@ from torch_geometric.utils import get_laplacian
 import torch
 from torch import nn
 import torch.nn.functional as F
-import shap
 from .utils import create_filter, cosine_sim
 from config import DEVICE
 import itertools
@@ -129,6 +128,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             return F.mse_loss(a_hat.triu(), a.triu())
 
     def explain(self, target):
+        import shap
         explainer = shap.explainers.Permutation(self(), target)
         shap_values = explainer(target)
         shap.plots.bar(shap_values)

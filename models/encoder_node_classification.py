@@ -23,7 +23,7 @@ class Rewirer(torch.nn.Module):
         super(Rewirer, self).__init__()
         self.data = data
         self.DATASET = DATASET
-        random_signals = get_random_signals(data.x.shape[0])
+        random_signals = get_random_signals(data.num_nodes)
 
         if mode == 'unsupervised':
             self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
