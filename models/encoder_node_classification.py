@@ -19,7 +19,7 @@ device = DEVICE
 
 
 class Rewirer(torch.nn.Module):
-    def __init__(self, data, DATASET, step=0.2, layers=[128, 64], mode="supervised", split=None):
+    def __init__(self, data, DATASET, step=0.2, layers=[128, 64], mode="supervised", split=None, exact=False):
         super(Rewirer, self).__init__()
         self.data = data
         self.DATASET = DATASET
@@ -27,12 +27,12 @@ class Rewirer(torch.nn.Module):
 
         if mode == 'unsupervised':
             self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
-            self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct')
-            self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
+            self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct', exact=exact)
+            self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv", exact=exact)
             self.models = [self.fea_sim_model, self.struct_sim_model]
         else:
             # self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
-            self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct')
+            self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct', exact=exact)
             # self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
             self.models = [self.struct_sim_model]
 
@@ -209,7 +209,7 @@ class Rewirer(torch.nn.Module):
         data = self.data
         community = create_label_sim_matrix(data)
 
-        for model in self.models[1:]:
+        for model in self.models:
             model.reset_parameters()
             best_acc = float(0)
             best_model = {}
@@ -581,7 +581,7 @@ class Rewirer(torch.nn.Module):
             x = torch.cat([self.models[i]() for i in model_indices], dim=1)
             num_classes = self.data.y.max().item() + 1
             cluster_ids_x, cluster_centers = kmeans(
-                X=x, num_clusters=num_classes, distance='cosine', device=device
+                X=x, num_clusters=num_classes, device=device
             )
             predicted = torch.zeros_like(cluster_ids_x, device=device)
             y = self.data.y
@@ -613,6 +613,7 @@ if __name__ == "__main__":
     parser.add_argument('--step', type=float, default=0.1)
     parser.add_argument('--split', type=int, default=None)
     parser.add_argument('--mode', type=str, default='supervised')
+    parser.add_argument('--exact', action='store_true')
     args = parser.parse_args()
 
     DATASET = args.dataset
@@ -631,5 +632,5 @@ if __name__ == "__main__":
     dataset = get_dataset(DATASET, normalize_features=True)
     data = dataset[0]
 
-    module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split)
+    module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split, exact=args.exact)
     module.train(epochs=10000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step)
