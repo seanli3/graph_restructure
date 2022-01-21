@@ -628,6 +628,8 @@ if __name__ == '__main__':
 
 def cosine_sim(a):
     eps = 1e-8
+    if len(a.shape) == 1:
+        a = a.view(-1, 1)
     if len(a.shape) == 2:
         a = a.view(1, a.shape[0], a.shape[1])
     a_n, b_n = a.norm(dim=2)[:, None], a.norm(dim=2)[:, None]

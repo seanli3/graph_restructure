@@ -59,29 +59,37 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
-    def __init__(self, data, x, step, name):
+    def __init__(self, data, x, step, name, exact):
         super(SpectralSimilarityEncoder, self).__init__()
         self.name = name
         self.step = step
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         L = torch.sparse_coo_tensor(L_index, L_weight, device=device, size=(data.num_nodes, data.num_nodes)).to_dense()
-        self.D = create_filter(L, self.step).permute(1, 2, 0)
+        self.exact = exact
+
+        if exact:
+            e, self.D = torch.linalg.eigh(L)
+        else:
+            self.D = create_filter(L, self.step).permute(1, 2, 0)
         self.data = data
 
         self.A = None
         self.windows = math.ceil(2./self.step)
 
-        self.layers = nn.Sequential(
-            nn.Linear(self.windows, 32, bias=False),
-            nn.ReLU(),
-            nn.Linear(32, 16, bias=False),
-            nn.Tanh(),
-            nn.Linear(16, 1, bias=False),
-        )
+        if exact:
+            self.layers = nn.Sequential(
+                nn.Linear(data.num_nodes, 32, bias=False)
+            )
+        else:
+            self.layers = nn.Sequential(
+                nn.Linear(self.windows, 32, bias=False),
+                nn.ReLU(),
+                nn.Linear(32, 16, bias=False),
+                nn.Tanh(),
+                nn.Linear(16, 1, bias=False),
+            )
         self.layers.to(device)
         self.x = x
-
-        self.linear = nn.Linear(x.shape[1], 16, bias=False)
 
         self.dist = torch.nn.functional.pdist
 
@@ -103,7 +111,10 @@ class SpectralSimilarityEncoder(torch.nn.Module):
 
         L_hat = self.layers(x_D).squeeze()
         # L_hat = self.layers(x_D.permute(0, 1, 2).view(self.windows, 1, -1)).squeeze()
-        x_hat = L_hat.matmul(self.x)
+        if self.exact:
+            x_hat = L_hat
+        else:
+            x_hat = L_hat.matmul(self.x)
         # return self.dist(x_hat, p=1)
         x_hat = torch.nn.functional.normalize(x_hat, p=2, dim=1)
         return x_hat
@@ -113,8 +124,6 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
                 torch.nn.init.normal_(layer.weight)
-        self.linear.reset_parameters()
-        torch.nn.init.normal_(self.linear.weight)
         self.layers.to(device)
 
     def loss(self, a_hat, a, mask=None):
