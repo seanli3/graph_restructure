@@ -350,7 +350,7 @@ def jacobi_inv(m, k):
 
 
 def neumann_inv(m, k):
-    I = torch.diag_embed(torch.ones(m.shape[0], m.shape[1]))
+    I = torch.diag_embed(torch.ones(m.shape[0], m.shape[1], device=device))
     ret = I
     for l in range(k):
         ret = ret.matmul(I + (I-m).matrix_power(int(math.pow(2,l))))
