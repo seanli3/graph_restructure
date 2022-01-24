@@ -1,6 +1,6 @@
 import os.path as osp
 import torch.cuda
-from torch_geometric.datasets import Amazon, Planetoid, Coauthor, Reddit, Flickr, Yelp, WebKB, WikipediaNetwork, Actor
+from torch_geometric.datasets import Amazon, Planetoid, Coauthor, Reddit, Flickr, Yelp, WebKB, WikipediaNetwork, Actor, Airports
 from ogb.nodeproppred import PygNodePropPredDataset
 import torch_geometric.transforms as T
 from torch_geometric.utils import add_self_loops, remove_self_loops
@@ -31,6 +31,14 @@ def get_dataset(name, normalize_features=False, transform=None,
         dataset = WikipediaNetwork(path, name, True)
     elif name.lower() in ['actor']:
         dataset = Actor(path)
+    elif name in ['Europe']:
+        dataset = Airports(path, name)
+        dataset.data.train_mask = torch.ones(dataset[0].num_nodes).bool()
+        dataset.data.train_mask[dataset[0].num_nodes//2:] = False
+        dataset.data.val_mask = torch.zeros(dataset[0].num_nodes).bool()
+        dataset.data.val_mask[dataset[0].num_nodes//2:dataset[0].num_nodes//2+dataset[0].num_nodes//4] = True
+        dataset.data.test_mask = torch.zeros(dataset[0].num_nodes).bool()
+        dataset.data.test_mask[dataset[0].num_nodes//2+dataset[0].num_nodes//4:] = True
     else:
         dataset = PygNcDataset(name=name, root=path, transform=T.ToSparseTensor())
 

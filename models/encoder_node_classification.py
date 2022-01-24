@@ -556,13 +556,13 @@ class Rewirer(torch.nn.Module):
 
                 # new_homophily = our_homophily_measure(get_masked_edges(adj, dataset[0].val_mask[:, self.split]),
                 #                           dataset[0].y[dataset[0].val_mask[:, self.split]])
-                new_homophily = our_homophily_measure(edges, dataset[0].y.where(mask, torch.tensor(-1, device=device)))
+                new_homophily = our_homophily_measure(edges, dataset[0].y.where(mask, torch.tensor(-1, device=device))).item()
                 print(
                     "edges: ", num_edges, "edges before: ", dataset.data.num_edges, " edges after: ",
                     edges.shape[1], 'homophily before:', ori_homo, 'homophily after:', new_homophily
                     )
                 xi.append(num_edges.item())
-                yi.append(new_homophily.item())
+                yi.append(new_homophily)
             from matplotlib import pyplot as plt
             yi = torch.tensor(yi)
             gradient = yi[1:] - yi[:-1]

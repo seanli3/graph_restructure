@@ -19,4 +19,8 @@
 
 #CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=citeseer --rewired --rewirer_step=0.1 --dropout=0.9 --model_indices 0 --num_edges=16076 --hidden=256 --runs=10
 
-CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cora --rewired --rewirer_step=0.1 --dropout=0.95 --model_indices 0 --num_edges=99744 --hidden=128 --runs=1
+#CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cora --rewired --rewirer_step=0.1 --dropout=0.95 --model_indices 0 --num_edges=99744 --hidden=128 --runs=1
+
+#CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cora --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --num_edges=1--hidden=256 --runs=10
+
+CPU_ONLY=1 python -m benchmark.node_classification.gcn --dataset=actor --rewired --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --num_edges=0 --hidden=256

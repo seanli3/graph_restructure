@@ -338,29 +338,43 @@ def test():
         print(seq_dec)
         print('')
 
-# This new rational approximator does not show any advatanges so far
-def create_filter(laplacian, step, order=2):
-    num_nodes = laplacian.shape[0]
-    offset = torch.arange(0, 2, step, device=device).view(-1, 1, 1)
-    a = 1/step
-    tmp = 2*a*laplacian - torch.eye(num_nodes, device=device)*(2*a*offset + 1)
-    # res = res.double()
-    if len(laplacian.shape) > 1:
-        i = 0
-        while True:
-            res = tmp.matrix_power(2 * (order - i)) + torch.eye(num_nodes, device=device)
-            try:
-                res = res.matrix_power(-1)
-                break
-            except RuntimeError as e:
-                i += 1
-                print('matrix not invertible, decreasing order to ' + str(order - i))
-    else:
-        res = tmp.pow(2*order) + 1
-        res = res.pow(-1)
-    return res.float()
 
-def create_filter_old(laplacian, step):
+# Don't use, doesn't converge
+def jacobi_inv(m, k):
+    X = torch.zeros_like(m, device=device)
+    D_inv = torch.diag_embed(1/m.diagonal(dim1=1, dim2=2))
+    LU = m.tril(-1) + m.triu(1)
+    for _ in range(k):
+        X = D_inv - D_inv.matmul(LU).matmul(X)
+    return X
+
+
+def neumann_inv(m, k):
+    I = torch.diag_embed(torch.ones(m.shape[0], m.shape[1]))
+    ret = I
+    for l in range(k):
+        ret = ret.matmul(I + (I-m).matrix_power(int(math.pow(2,l))))
+    return ret
+
+
+# This new rational approximator does not show any advatanges so far
+def create_filter(laplacian, step, order=2, neumann_order=15):
+    num_nodes = laplacian.shape[0]
+    a = torch.arange(0, 2+step, step, device=device).view(-1, 1, 1)
+    s = 4/step
+    m = order*2
+    e = 1e-13
+
+    if len(laplacian.shape) > 1:
+        I = torch.eye(num_nodes, device=device)
+        B = ((laplacian - a * I).matmul(I / (2 + e)) - I / math.pow(s, m)).matrix_power(m) + I / math.pow(s, m)
+        ret = neumann_inv(B, neumann_order)
+        ret = (I / math.pow(s, m)).matmul(ret)
+    else:
+        ret = 1/s.pow(m)*(((laplacian - a)/(e+e) - 1/s.pow(m)).pow(m) + 1/s.pow(m)).pow(-1)
+    return ret.float()
+
+def create_filter_old(laplacian, step, order=2):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))
     part2 = (laplacian - torch.diag(torch.ones(laplacian.shape[0], device=device)) * torch.arange(
         0, 2.1, step, device=device

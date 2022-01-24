@@ -13,4 +13,6 @@
 
 #CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.appnp --dataset=squirrel --rewired --rewirer_step=0.1 --dropout=0.3 --model_indices 0 --num_edges=17336 --hidden=512 --K=2 --alpha=0.1
 #CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.appnp --dataset=citeseer --rewired --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --num_edges=16076 --hidden=256 --K=2 --alpha=0.1 --runs=10
-CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.appnp --dataset=cora --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --num_edges=99744 --hidden=512 --K=1 --alpha=0.3 --runs=10
+#CUDA_DEVICE=6 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.appnp --dataset=cora --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --num_edges=99744 --hidden=512 --K=1 --alpha=0.3 --runs=10
+#CPU_ONLY=1 python -m benchmark.node_classification.appnp --dataset=actor --rewired --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --num_edges=0 --hidden=128 --K=2 --alpha=0.3
+#CPU_ONLY=1 python -m benchmark.node_classification.appnp --dataset=actor --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --num_edges=0 --hidden=128 --K=2 --alpha=0.3

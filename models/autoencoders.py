@@ -74,7 +74,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         self.data = data
 
         self.A = None
-        self.windows = math.ceil(2./self.step)
+        self.windows = math.ceil((2+self.step)/self.step)
 
         if exact:
             self.layers = nn.Sequential(
