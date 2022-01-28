@@ -626,6 +626,7 @@ if __name__ == "__main__":
     parser.add_argument('--split', type=int, default=None)
     parser.add_argument('--mode', type=str, default='supervised')
     parser.add_argument('--exact', action='store_true')
+    parser.add_argument('--lcc', action='store_true')
     args = parser.parse_args()
 
     DATASET = args.dataset
@@ -641,7 +642,7 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(seed)
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    dataset = get_dataset(DATASET, normalize_features=True)
+    dataset = get_dataset(DATASET, normalize_features=True, lcc=args.lcc)
     data = dataset[0]
 
     module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split, exact=args.exact)

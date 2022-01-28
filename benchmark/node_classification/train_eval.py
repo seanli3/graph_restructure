@@ -15,9 +15,9 @@ device = DEVICE
 
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, run_split=None,
-        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1]):
+        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1], lcc=False):
 
-    dataset = get_dataset(dataset_name, normalize_features)
+    dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
     if len(dataset.data.train_mask.shape) > 1:
         splits = [run_split] if run_split is not None else range(dataset.data.train_mask.shape[1])
         has_splits = True
@@ -41,14 +41,14 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
         if has_splits:
             print('Split:', split)
         if rewired:
-            dataset = get_dataset(dataset_name, normalize_features)
+            dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
             rewirer = Rewirer(
                 dataset[0], DATASET=dataset.name, step=rewirer_step, layers=rewirer_layers,
                 mode=rewirer_mode, split=split if has_splits else None)
             rewirer.load()
             dataset = get_dataset(dataset_name, normalize_features,
-                                  transform=lambda d:rewirer.rewire(d, model_indices,num_edges)
-                                  )
+                                  transform=lambda d:rewirer.rewire(d, model_indices,num_edges),
+                                  lcc=lcc)
 
         data = dataset[0]
 
