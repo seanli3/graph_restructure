@@ -6,6 +6,7 @@ path = Path(__file__).parent
 
 SAVED_MODEL_DIR_NODE_CLASSIFICATION = str(path / 'models/saved_models/node_classification')
 SAVED_MODEL_DIR_GRAPH_CLASSIFICATION = str(path / 'models/saved_models/graph_classification')
+EDGES_DIR_NODE_CLASSIFICATION = str(path / 'models/saved_models/node_classification')
 
 for p in [SAVED_MODEL_DIR_GRAPH_CLASSIFICATION, SAVED_MODEL_DIR_GRAPH_CLASSIFICATION]:
     if not os.path.exists(p):
