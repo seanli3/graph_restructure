@@ -454,16 +454,19 @@ class Rewirer(torch.nn.Module):
         with torch.no_grad():
             # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
             # triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, offset=1)
-            fea_sim = cosine_sim(dataset[0].x).squeeze().fill_diagonal_(0)
-            a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
-            a += fea_sim
+            # fea_sim = cosine_sim(dataset[0].x).squeeze().fill_diagonal_(0)
+            a_hat = torch.zeros(dataset[0].num_nodes, dataset[0].num_nodes, device=device)
             for model in map(self.models.__getitem__, model_indices):
-                a_hat = model.sim().squeeze_().fill_diagonal_(0)
+                model.to(device)
+                a_hat += model.sim().squeeze_().fill_diagonal_(0)
                 # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
-                a = a + a_hat
-            a += torch.eye(a.shape[1], a.shape[1], device=device)*-9e9
+            # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
+            # a += fea_sim
+            a = torch.zeros_like(a_hat, device=device)
+            a = a + a_hat
+            a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
             # print(a.min(), a.max())
             # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
             new_dataset = deepcopy(dataset)
@@ -536,18 +539,22 @@ class Rewirer(torch.nn.Module):
             yi = []
             ori_homo = our_homophily_measure(dataset[0].edge_index, dataset[0].y.where(mask, torch.tensor(-1, device=device))).item()
             fea_sim = cosine_sim(dataset[0].x).squeeze().fill_diagonal_(0)
+            best_homo = 0
+            best_num_edges = 0
+            a_hat = torch.zeros_like(fea_sim)
+            for model in map(self.models.__getitem__, model_indices):
+                model.to(device)
+                a_hat += model.sim().squeeze_().fill_diagonal_(0)
+                # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
+                # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
+                # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
+            # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
+            # a += fea_sim
+            a = torch.zeros_like(fea_sim)
+            a = a + a_hat
+            a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
 
-            for num_edges in torch.arange(dataset[0].num_nodes//3, dataset[0].num_nodes*100, dataset[0].num_nodes//2):
-                a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
-                a += fea_sim
-                for model in map(self.models.__getitem__, model_indices):
-                    model.to(device)
-                    a_hat = model.sim().squeeze_().fill_diagonal_(0)
-                    # a_hat = torch.zeros(data.num_nodes, data.num_nodes).index_put((triu_indices[0],triu_indices[1]), a_hat)
-                    # a += torch.zeros_like(a_hat).masked_fill_(a_hat > eps_1, 1)
-                    # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
-                    a = a + a_hat
-                a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
+            for num_edges in torch.arange(dataset[0].num_nodes//10, dataset[0].num_nodes*50, 10):
                 # print(a.min(), a.max())
                 # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
                 # new_dataset.data.edge_index = (a > threshold).nonzero().T
@@ -557,10 +564,13 @@ class Rewirer(torch.nn.Module):
                 # new_homophily = our_homophily_measure(get_masked_edges(adj, dataset[0].val_mask[:, self.split]),
                 #                           dataset[0].y[dataset[0].val_mask[:, self.split]])
                 new_homophily = our_homophily_measure(edges, dataset[0].y.where(mask, torch.tensor(-1, device=device))).item()
-                print(
-                    "edges: ", num_edges, "edges before: ", dataset.data.num_edges, " edges after: ",
-                    edges.shape[1], 'homophily before:', ori_homo, 'homophily after:', new_homophily
-                    )
+                if new_homophily > best_homo:
+                    best_homo = new_homophily
+                    best_num_edges = num_edges
+                # print(
+                #     "edges: ", num_edges, "edges before: ", dataset.data.num_edges, " edges after: ",
+                #     edges.shape[1], 'homophily before:', ori_homo, 'homophily after:', new_homophily
+                #     )
                 xi.append(num_edges.item())
                 yi.append(new_homophily)
             from matplotlib import pyplot as plt
@@ -571,6 +581,8 @@ class Rewirer(torch.nn.Module):
             plt.axhline(y=ori_homo, color='r', linestyle='-')
             plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
             plt.show()
+
+            print('split: {}, best_homo: {}, best_num_edges: {}'.format(self.split, best_homo, best_num_edges))
 
     def kmeans(self, model_indices, split):
         from kmeans_pytorch import kmeans
