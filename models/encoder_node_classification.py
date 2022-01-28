@@ -553,8 +553,12 @@ class Rewirer(torch.nn.Module):
             a = torch.zeros_like(fea_sim)
             a = a + a_hat
             a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
+            edges_preserved = 0
+            edges_added = 0
+            edges_removed = 0
+            A = get_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
 
-            for num_edges in torch.arange(dataset[0].num_nodes//10, dataset[0].num_nodes*50, 10):
+            for num_edges in torch.arange(dataset[0].num_nodes//10, dataset[0].num_nodes*100, 10):
                 # print(a.min(), a.max())
                 # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
                 # new_dataset.data.edge_index = (a > threshold).nonzero().T
@@ -567,6 +571,11 @@ class Rewirer(torch.nn.Module):
                 if new_homophily > best_homo:
                     best_homo = new_homophily
                     best_num_edges = num_edges
+                    A_prime = get_adj(edges, None, dataset[0].num_nodes)
+                    edges_preserved = ((A_prime + A) > 1).count_nonzero()
+                    edges_removed = ((A - A_prime) > 0).count_nonzero()
+                    edges_added = ((A_prime - A) > 0).count_nonzero()
+
                 # print(
                 #     "edges: ", num_edges, "edges before: ", dataset.data.num_edges, " edges after: ",
                 #     edges.shape[1], 'homophily before:', ori_homo, 'homophily after:', new_homophily
@@ -582,7 +591,8 @@ class Rewirer(torch.nn.Module):
             plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
             plt.show()
 
-            print('split: {}, best_homo: {}, best_num_edges: {}'.format(self.split, best_homo, best_num_edges))
+            print('split: {}, best_homo: {}, best_num_edges: {}, edges preserved: {}, edges_added: {}, edges_deleted: {}'
+                  .format(self.split, best_homo, best_num_edges//2, edges_preserved//2, edges_added//2, edges_removed//2))
 
     def kmeans(self, model_indices, split):
         from kmeans_pytorch import kmeans
