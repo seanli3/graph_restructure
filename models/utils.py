@@ -96,7 +96,7 @@ def our_homophily_measure(edge_index, label):
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
     complete_graph_edges = complete_graph_edges + torch.diag(counts)
     h = H/complete_graph_edges
-    h_homo = h.diag()
+    h_homo = h.diag().min()
     h_hete = (h.triu(1) + h.tril(-1)).max(1)[0]
     # ret = max(h_hete, h_homo) * (h_homo - h_hete) / density
     # return 1 / (1 + torch.exp(- ret))
@@ -646,8 +646,9 @@ def cosine_sim(a):
         a = a.view(-1, 1)
     if len(a.shape) == 2:
         a = a.view(1, a.shape[0], a.shape[1])
-    a_n, b_n = a.norm(dim=2)[:, None], a.norm(dim=2)[:, None]
-    a_norm = a / torch.clamp(a_n, min=eps).view(a.shape[0], a.shape[1], 1)
-    b_norm = a / torch.clamp(b_n, min=eps).view(a.shape[0], a.shape[1], 1)
-    sim_mt = a_norm.matmul(b_norm.permute(0, 2, 1))
+    # a_n, b_n = a.norm(dim=2)[:, None], a.norm(dim=2)[:, None]
+    # a_norm = a / torch.clamp(a_n, min=eps).view(a.shape[0], a.shape[1], 1)
+    # b_norm = a / torch.clamp(b_n, min=eps).view(a.shape[0], a.shape[1], 1)
+    # sim_mt = a_norm.matmul(b_norm.permute(0, 2, 1))
+    sim_mt = a.matmul(a.permute(0, 2, 1))
     return sim_mt

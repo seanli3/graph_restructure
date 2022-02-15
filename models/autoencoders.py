@@ -82,11 +82,11 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             )
         else:
             self.layers = nn.Sequential(
-                nn.Linear(self.windows, 32, bias=False),
+                nn.Linear(self.windows, 64, bias=False),
                 nn.ReLU(),
-                nn.Linear(32, 16, bias=False),
-                nn.Tanh(),
-                nn.Linear(16, 1, bias=False),
+                nn.Linear(64, 32, bias=False),
+                nn.ReLU(),
+                nn.Linear(32, 1, bias=False),
             )
         self.layers.to(device)
         self.x = x
@@ -116,7 +116,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         else:
             x_hat = L_hat.matmul(self.x)
         # return self.dist(x_hat, p=1)
-        x_hat = torch.nn.functional.normalize(x_hat, p=2, dim=1)
+        # x_hat = torch.nn.functional.normalize(x_hat, p=2, dim=1)
         return x_hat
 
     def reset_parameters(self):

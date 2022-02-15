@@ -36,7 +36,7 @@ def get_largest_connected_component(dataset: InMemoryDataset) -> np.ndarray:
 def get_component(dataset: InMemoryDataset, start: int = 0) -> set:
     visited_nodes = set()
     queued_nodes = set([start])
-    row, col = dataset.data.edge_index.numpy()
+    row, col = dataset.data.edge_index.cpu().numpy()
     while queued_nodes:
         current_node = queued_nodes.pop()
         visited_nodes.update([current_node])
@@ -151,10 +151,6 @@ def get_dataset(name, normalize_features=False, transform=None,
     if hasattr(dataset, '_data_list'):
         del dataset._data_list
 
-    dataset.data.to(device)
-    if hasattr(dataset, '_data_list') and dataset._data_list:
-        for d in dataset._data_list:
-            d.to(device)
 
     if lcc:
         print("Original #nodes:", dataset[0].num_nodes)
@@ -163,7 +159,7 @@ def get_dataset(name, normalize_features=False, transform=None,
         x_new = dataset.data.x[lcc]
         y_new = dataset.data.y[lcc]
 
-        row, col = dataset.data.edge_index.numpy()
+        row, col = dataset.data.edge_index.cpu().numpy()
         edges = [[i, j] for i, j in zip(row, col) if i in lcc and j in lcc]
         edges = remap_edges(edges, get_node_mapper(lcc))
 
@@ -171,14 +167,16 @@ def get_dataset(name, normalize_features=False, transform=None,
             x=x_new, edge_index=torch.LongTensor(edges), y=y_new,
             train_mask=torch.zeros(y_new.size()[0], dtype=torch.bool),
             test_mask=torch.zeros(y_new.size()[0], dtype=torch.bool),
-            val_mask=torch.zeros(y_new.size()[0], dtype=torch.bool)
+            val_mask=torch.zeros(y_new.size()[0], dtype=torch.bool),
         )
         set_train_val_test_split(data)
         dataset.data = data
         print("#Nodes after lcc:", dataset[0].num_nodes)
 
-    return dataset
-
+    dataset.data.to(device)
+    if hasattr(dataset, '_data_list') and dataset._data_list:
+        for d in dataset._data_list:
+            d.to(device)
     if transform:
         dataset = transform(dataset)
 

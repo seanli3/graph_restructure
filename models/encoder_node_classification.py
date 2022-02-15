@@ -32,7 +32,7 @@ class Rewirer(torch.nn.Module):
             self.models = [self.fea_sim_model, self.struct_sim_model]
         else:
             # self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
-            self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct', exact=exact)
+            self.struct_sim_model = SpectralSimilarityEncoder(data, torch.cat((data.x, random_signals), dim=1), step=step, name='struct', exact=exact)
             # self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
             self.models = [self.struct_sim_model]
 
@@ -541,6 +541,7 @@ class Rewirer(torch.nn.Module):
             fea_sim = cosine_sim(dataset[0].x).squeeze().fill_diagonal_(0)
             best_homo = 0
             best_num_edges = 0
+            A = get_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
             a_hat = torch.zeros_like(fea_sim)
             for model in map(self.models.__getitem__, model_indices):
                 model.to(device)
@@ -550,15 +551,13 @@ class Rewirer(torch.nn.Module):
                 # a += torch.zeros_like(a_hat).masked_fill_(a_hat < eps_2, -1)
             # a = get_normalized_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
             # a += fea_sim
-            a = torch.zeros_like(fea_sim)
-            a = a + a_hat
+            a = a_hat
             a += torch.eye(a.shape[1], a.shape[1], device=device) * -9e9
             edges_preserved = 0
             edges_added = 0
             edges_removed = 0
-            A = get_adj(dataset[0].edge_index, None, dataset[0].num_nodes)
 
-            for num_edges in torch.arange(dataset[0].num_nodes//10, dataset[0].num_nodes*100, 10):
+            for num_edges in torch.arange(1, dataset[0].num_nodes*50, 1):
                 # print(a.min(), a.max())
                 # print("edges before: ", dataset.data.num_edges, "edges after: ", (a > threshold).count_nonzero().item())
                 # new_dataset.data.edge_index = (a > threshold).nonzero().T
@@ -572,9 +571,9 @@ class Rewirer(torch.nn.Module):
                     best_homo = new_homophily
                     best_num_edges = num_edges
                     A_prime = get_adj(edges, None, dataset[0].num_nodes)
-                    edges_preserved = ((A_prime + A) > 1).count_nonzero()
-                    edges_removed = ((A - A_prime) > 0).count_nonzero()
-                    edges_added = ((A_prime - A) > 0).count_nonzero()
+                    edges_preserved = A.logical_and(A_prime).count_nonzero()
+                    edges_removed = A.logical_and(A_prime.logical_not()).count_nonzero()
+                    edges_added = A_prime.logical_and(A.logical_not()).count_nonzero()
 
                 # print(
                 #     "edges: ", num_edges, "edges before: ", dataset.data.num_edges, " edges after: ",
@@ -591,8 +590,8 @@ class Rewirer(torch.nn.Module):
             plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
             plt.show()
 
-            print('split: {}, best_homo: {}, best_num_edges: {}, edges preserved: {}, edges_added: {}, edges_deleted: {}'
-                  .format(self.split, best_homo, best_num_edges//2, edges_preserved//2, edges_added//2, edges_removed//2))
+            print('split: {}, ori_homo: {}, best_homo: {}, best_num_edges: {}, edges preserved: {}, edges_added: {}, edges_deleted: {}'
+                  .format(self.split, ori_homo, best_homo, best_num_edges, edges_preserved//2, edges_added//2, edges_removed//2))
 
     def kmeans(self, model_indices, split):
         from kmeans_pytorch import kmeans
@@ -656,4 +655,4 @@ if __name__ == "__main__":
     data = dataset[0]
 
     module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split, exact=args.exact)
-    module.train(epochs=10000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step)
+    module.train(epochs=100000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step)
