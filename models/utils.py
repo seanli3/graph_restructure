@@ -358,20 +358,20 @@ def neumann_inv(m, k):
 
 
 # This new rational approximator does not show any advatanges so far
-def create_filter(laplacian, step, order=2, neumann_order=15):
+def create_filter(laplacian, step, order=2, neumann_order=25):
     num_nodes = laplacian.shape[0]
     a = torch.arange(0, 2+step, step, device=device).view(-1, 1, 1)
     s = 4/step
     m = order*2
-    e = 1e-13
+    e = 2*math.pow(s, 2*m)/(math.pow(s, 2*m)-1)-2 + 1e-6
 
     if len(laplacian.shape) > 1:
         I = torch.eye(num_nodes, device=device)
-        B = ((laplacian - a * I).matmul(I / (2 + e)) - I / math.pow(s, m)).matrix_power(m) + I / math.pow(s, m)
+        B = ((laplacian - a * I).matmul(I / (2 + e))).matrix_power(m) + I / math.pow(s, m)
         ret = neumann_inv(B, neumann_order)
         ret = (I / math.pow(s, m)).matmul(ret)
     else:
-        ret = 1/s.pow(m)*(((laplacian - a)/(e+e) - 1/s.pow(m)).pow(m) + 1/s.pow(m)).pow(-1)
+        ret = 1/s.pow(m)*(((laplacian - a)/(2+e)).pow(m) + 1/s.pow(m)).pow(-1)
     return ret.float()
 
 def create_filter_old(laplacian, step, order=2):
