@@ -15,7 +15,8 @@ device = DEVICE
 
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, run_split=None,
-        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1], lcc=False):
+        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1],
+        lcc=False, loss='triplet', eps='0.1'):
 
     dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
     if len(dataset.data.train_mask.shape) > 1:
@@ -44,12 +45,11 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
             dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
             rewirer = Rewirer(
                 dataset[0], DATASET=dataset.name, step=rewirer_step, layers=rewirer_layers,
-                mode=rewirer_mode, split=split if has_splits else None)
+                mode=rewirer_mode, split=split if has_splits else None, loss=loss, eps=eps)
             rewirer.load()
             dataset = get_dataset(dataset_name, normalize_features,
                                   transform=lambda d:rewirer.rewire(d, model_indices,num_edges),
                                   lcc=lcc)
-
         data = dataset[0]
 
         for _ in range(runs):
@@ -71,7 +71,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                 train(model, optimizer, data, split=split if has_splits else None)
                 eval_info = evaluate(model, data, split=split if has_splits else None)
                 eval_info['epoch'] = epoch
-                if epoch % 10 == 0:
+                if epoch % 2 == 0:
                     pbar.set_description(
                         'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
                         'test loss: {:.2f}, test acc: {:.4f}'
@@ -101,6 +101,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
             test_accs.append(eval_info_early_model['test_acc'])
             test_macro_f1s.append(eval_info_early_model['test_macro_f1'])
             durations.append(t_end - t_start)
+        print(eval_info_early_model)
 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, duration = tensor(val_losses), tensor(train_accs), tensor(val_accs), \
                                                             tensor(test_accs), tensor(test_macro_f1s), tensor(durations)

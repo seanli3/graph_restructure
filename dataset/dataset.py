@@ -18,7 +18,6 @@ from .data_utils import rand_train_test_idx, even_quantile_labels, to_sparse_ten
 from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import NormalizeFeatures
 from torch_sparse import SparseTensor
-from ogb.nodeproppred import NodePropPredDataset
 
 
 class NCDataset(object):
@@ -244,6 +243,7 @@ def load_deezer_dataset():
 def load_arxiv_year_dataset(nclass=5):
     filename = 'arxiv-year'
     dataset = NCDataset(filename)
+    from ogb.nodeproppred import NodePropPredDataset
     ogb_dataset = NodePropPredDataset(name='ogbn-arxiv')
     dataset.graph = ogb_dataset.graph
     dataset.graph['edge_index'] = torch.as_tensor(dataset.graph['edge_index'])
@@ -256,6 +256,7 @@ def load_arxiv_year_dataset(nclass=5):
 
 
 def load_proteins_dataset():
+    from ogb.nodeproppred import NodePropPredDataset
     ogb_dataset = NodePropPredDataset(name='ogbn-proteins')
     dataset = NCDataset('ogbn-proteins')
 
@@ -276,6 +277,7 @@ def load_proteins_dataset():
 
 def load_ogb_dataset(name):
     dataset = NCDataset(name)
+    from ogb.nodeproppred import NodePropPredDataset
     ogb_dataset = NodePropPredDataset(name=name)
     dataset.graph = ogb_dataset.graph
     dataset.graph['edge_index'] = torch.as_tensor(dataset.graph['edge_index'])

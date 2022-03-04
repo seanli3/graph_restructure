@@ -4,7 +4,6 @@ import os
 import pandas as pd
 import torch
 import torch.nn.functional as F
-from ogb.graphproppred.mol_encoder import BondEncoder, AtomEncoder
 from torch_geometric.utils import get_laplacian
 
 from config import EDGE_LOGIT_THRESHOLD
@@ -366,6 +365,7 @@ class RewireNetGraphClassification(torch.nn.Module):
             self.edge_encoder = torch.nn.Linear(7, self.emb_dim)
             self.node_encoder = torch.nn.Embedding(1, self.emb_dim)  # uniform input node embedding
         elif 'mol' in dataset.name.lower():
+            from ogb.graphproppred.mol_encoder import BondEncoder, AtomEncoder
             self.emb_dim = 300
             self.edge_encoder = BondEncoder(self.emb_dim)
             self.node_encoder = AtomEncoder(self.emb_dim)

@@ -3,7 +3,7 @@ from torch_geometric.utils import get_laplacian
 import torch
 from torch import nn
 import torch.nn.functional as F
-from .utils import create_filter, cosine_sim
+from .utils import create_filter, dot_product
 from config import DEVICE
 import itertools
 
@@ -15,7 +15,6 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
         super(NodeFeatureSimilarityEncoder, self).__init__()
 
         self.name = name
-        self.dist = torch.nn.functional.pdist
         layer_size = [data.num_features] + layers
         self.layers = nn.Sequential(
             *list(itertools.chain(*[
@@ -33,11 +32,10 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
         return hook
 
     def sim(self):
-        return cosine_sim(self())
+        return dot_product(self())
 
     def forward(self):
         output = self.layers(self.x)
-        output = torch.nn.functional.normalize(output, p=2, dim=1)
         return output
 
     def reset_parameters(self):
@@ -91,8 +89,6 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         self.layers.to(device)
         self.x = x
 
-        self.dist = torch.nn.functional.pdist
-
         self.outputs = {}
 
     def get_activation(self, name):
@@ -101,7 +97,10 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         return hook
 
     def sim(self):
-        return cosine_sim(self())
+        return dot_product(self())
+
+    def dist(self):
+        return torch.nn.functional.pdist(self(), p=2)
 
     def forward(self, input_weights=None):
         if input_weights is not None:
@@ -126,15 +125,55 @@ class SpectralSimilarityEncoder(torch.nn.Module):
                 torch.nn.init.normal_(layer.weight)
         self.layers.to(device)
 
-    def loss(self, a_hat, a, mask=None):
-        a_hat = a_hat.squeeze().clip(min=0)
+    def sim_mse_loss(self, s, a, mask=None):
+        s = s.squeeze().clip(min=0)
         a = a.squeeze().clip(min=0)
         if mask is not None:
             masked_a = a.triu()[mask][:,mask]
-            masked_a_hat = a_hat.triu()[mask][:,mask]
+            masked_a_hat = s.triu()[mask][:,mask]
             return F.mse_loss(masked_a_hat, masked_a)
         else:
-            return F.mse_loss(a_hat.triu(), a.triu())
+            return F.mse_loss(s.triu(), a.triu())
+
+    def sim_npair_loss(self, x, positive_nodes, negative_nodes, mask=None):
+        x = x.squeeze().clip(min=0)
+        # https://lilianweng.github.io/lil-log/2021/05/31/contrastive-representation-learning.html#contrastive-loss
+        node_indices = mask.nonzero().view(-1)
+        s_masked = x[node_indices]
+        positive_loss = torch.exp(s_masked.view(s_masked.shape[0], 1, s_masked.shape[1]).matmul(
+                        s_masked[positive_nodes].permute(0, 2, 1)
+                       )).clamp(max=9e23).squeeze()
+        negative_loss_sum = s_masked.view(s_masked.shape[0], 1, s_masked.shape[1]).matmul(
+                                s_masked[negative_nodes].permute(0, 2, 1)
+                            ).sum(dim=2).clamp(max=9e23).squeeze()
+        positive_loss = positive_loss.where(torch.isnan(positive_loss).logical_not(), torch.tensor(9e23, device=device))
+        negative_loss_sum= negative_loss_sum.where(torch.isnan(negative_loss_sum).logical_not(), torch.tensor(9e23, device=device))
+        loss = -torch.log(positive_loss/(positive_loss + negative_loss_sum))
+        return loss.sum()
+
+    def dist_triplet_loss(self, d, dist_diff_indices, eps=0.05):
+        triu_indices = torch.triu_indices(row=self.data.num_nodes, col=self.data.num_nodes, offset=1, device=device)
+        dist = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+        dist[triu_indices[0], triu_indices[1]] = d.pow(2)
+        dist = dist + dist.T
+        intra_class_edge_indices = dist_diff_indices[:, 0].T
+        inter_class_edge_indices = dist_diff_indices[:, 1].T
+        intra_class_dist = dist[intra_class_edge_indices[0], intra_class_edge_indices[1]]
+        inter_class_dist = dist[inter_class_edge_indices[0], inter_class_edge_indices[1]]
+        l = (intra_class_dist-inter_class_dist + eps).clamp(min=0).sum()
+        return l
+
+    def dist_contrastive_loss(self, d, dist_diff_indices, eps=0.05):
+        triu_indices = torch.triu_indices(row=self.data.num_nodes, col=self.data.num_nodes, offset=1, device=device)
+        dist = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+        dist[triu_indices[0], triu_indices[1]] = d.pow(2)
+        dist = dist + dist.T
+        intra_class_edge_indices = dist_diff_indices[:, 0].T
+        inter_class_edge_indices = dist_diff_indices[:, 1].T
+        intra_class_dist = dist[intra_class_edge_indices[0], intra_class_edge_indices[1]]
+        inter_class_dist = (eps - dist[inter_class_edge_indices[0], inter_class_edge_indices[1]]).clamp(min=0)
+        l = (intra_class_dist + inter_class_dist).sum()
+        return l
 
     def explain(self, target):
         import shap
@@ -152,7 +191,6 @@ class LowPassSimilarityEncoder(torch.nn.Module):
         self.D = torch.eye(data.num_nodes, data.num_nodes, device=device) - L
         self.data = data
         self.x = x
-        self.dist = torch.nn.functional.pdist
         self.outputs = {}
 
     def get_activation(self, name):
@@ -161,11 +199,10 @@ class LowPassSimilarityEncoder(torch.nn.Module):
         return hook
 
     def sim(self):
-        return cosine_sim(self())
+        return dot_product(self())
 
     def forward(self):
         x_hat = self.D.mm(self.x)
-        x_hat = torch.nn.functional.normalize(x_hat, p=2, dim=1)
         return x_hat
 
     def reset_parameters(self):

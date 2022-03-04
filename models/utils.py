@@ -95,9 +95,13 @@ def our_homophily_measure(edge_index, label):
     density = 2*num_edges/num_nodes/(num_nodes+1)
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
     complete_graph_edges = complete_graph_edges + torch.diag(counts)
-    h = H/complete_graph_edges
-    h_homo = h.diag().min()
-    h_hete = (h.triu(1) + h.tril(-1)).max(1)[0]
+    try:
+        h = H/complete_graph_edges
+    except RuntimeError as e:
+        print('Missing labels')
+        raise e
+    h_homo = h.diag()
+    h_hete = (h.triu(1) + h.tril(-1)).mean(1)
     # ret = max(h_hete, h_homo) * (h_homo - h_hete) / density
     # return 1 / (1 + torch.exp(- ret))
     return (h_homo - h_hete).mean()/2+0.5
@@ -627,7 +631,20 @@ def create_label_sim_matrix(data):
     community = torch.zeros(data.num_nodes, data.num_nodes, device=device)
     for c in range(data.y.max() + 1):
         community = community + (data.y ==c).float().view(-1, 1).mm((data.y ==c).float().view(1, -1))
-    return community.where(community>0, torch.tensor(-1.).to(device))
+    community.fill_diagonal_(0)
+    return community
+
+
+def get_distance_diff_indices(data, mask):
+    community = create_label_sim_matrix(data)
+    indices = []
+    for i in range(community.shape[0]):
+        intra_class = community[i].bool().logical_and(mask).nonzero().view(-1).tolist()
+        inverse_comm = community[i].bool().logical_not()
+        inverse_comm[i] = False
+        inter_class = inverse_comm.logical_and(mask).nonzero().view(-1).tolist()
+        indices += product(product([i], intra_class), product([i], inter_class))
+    return torch.tensor(indices)
 
 
 def get_masked_edges(adj, mask):
@@ -635,12 +652,11 @@ def get_masked_edges(adj, mask):
     return subgraph_adj.nonzero().T
 
 
-
 if __name__ == '__main__':
     test()
 
 
-def cosine_sim(a):
+def dot_product(a):
     eps = 1e-8
     if len(a.shape) == 1:
         a = a.view(-1, 1)

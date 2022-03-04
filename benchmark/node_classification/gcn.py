@@ -28,6 +28,8 @@ parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
 parser.add_argument('--num_edges', type=float, default=3000)
 parser.add_argument('--rewirer_mode', type=str, default='supervised')
 parser.add_argument('--lcc', action='store_true')
+parser.add_argument('--loss', type=str, default='triplet')
+parser.add_argument('--eps', type=float, default=0.1)
 args = parser.parse_args()
 
 
@@ -64,5 +66,6 @@ class Net(torch.nn.Module):
         return F.log_softmax(x, dim=1), x
 
 
-run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, run_split=args.run_split,
-    num_edges=args.num_edges, model_indices=args.model_indices, rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step, lcc=args.lcc)
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
+    run_split=args.run_split, num_edges=args.num_edges, model_indices=args.model_indices,
+    rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step, lcc=args.lcc, loss=args.loss, eps=args.eps)

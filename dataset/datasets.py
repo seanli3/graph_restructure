@@ -2,7 +2,6 @@ import os.path as osp
 import torch.cuda
 from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.datasets import Amazon, Planetoid, Coauthor, Reddit, Flickr, Yelp, WebKB, WikipediaNetwork, Actor
-from ogb.nodeproppred import PygNodePropPredDataset
 import torch_geometric.transforms as T
 from torch_geometric.utils import add_self_loops, remove_self_loops
 from torch_geometric.utils import is_undirected, to_undirected, to_networkx
