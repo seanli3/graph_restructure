@@ -635,15 +635,17 @@ def create_label_sim_matrix(data):
     return community
 
 
-def get_distance_diff_indices(data, mask):
-    community = create_label_sim_matrix(data)
+def get_distance_diff_indices(community, mask, num_samples=5):
     indices = []
     for i in range(community.shape[0]):
         intra_class = community[i].bool().logical_and(mask).nonzero().view(-1).tolist()
         inverse_comm = community[i].bool().logical_not()
         inverse_comm[i] = False
         inter_class = inverse_comm.logical_and(mask).nonzero().view(-1).tolist()
-        indices += product(product([i], intra_class), product([i], inter_class))
+        if len(inter_class) > 0 and len(intra_class)> 0:
+            intra_class = np.random.choice(intra_class, num_samples)
+            inter_class = np.random.choice(inter_class, num_samples)
+            indices += product(product([i], intra_class), product([i], inter_class))
     return torch.tensor(indices)
 
 

@@ -44,11 +44,11 @@ class Rewirer(torch.nn.Module):
         self.mode = mode
         self.split = split
 
-    def train(self, epochs, lr, weight_decay, patience, step):
+    def train(self, epochs, lr, weight_decay, patience, step, sample_size):
         if self.mode == 'supervised':
             train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
             val_mask = self.data.val_mask[:, self.split] if self.split is not None else self.data.val_mask
-            self.train_supervised(epochs, lr, weight_decay, patience, step, train_mask, val_mask)
+            self.train_supervised(epochs, lr, weight_decay, patience, step, train_mask, val_mask, sample_size)
         elif self.mode == 'kmeans':
             train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
             val_mask = self.data.val_mask[:, self.split] if self.split is not None else self.data.val_mask
@@ -58,20 +58,17 @@ class Rewirer(torch.nn.Module):
         elif self.mode == 'vae':
             self.train_vae(epochs, lr, weight_decay, patience, step)
 
-    def train_supervised(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask):
+    def train_supervised(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask, sample_size):
         data = self.data
         # community_mask = create_label_sim_matrix(data).bool()
-        train_dist_diff_indices = get_distance_diff_indices(data, train_mask)
-        val_dist_diff_indices = get_distance_diff_indices(data, val_mask)
+        community = create_label_sim_matrix(data)
+        val_dist_diff_indices = get_distance_diff_indices(community, val_mask, num_samples=sample_size)
 
         if self.loss == 'npair':
             train_positive_nodes = sample_positive_nodes_dict(train_mask, self.data.y, 1)
             train_negative_nodes = sample_negative_nodes_dict(train_mask, self.data.y, (self.data.y.max().item() + 1) * 2)
             val_positive_nodes = sample_positive_nodes_dict(val_mask, self.data.y, 1)
             val_negative_nodes = sample_negative_nodes_dict(val_mask, self.data.y, (self.data.y.max().item() + 1) * 2)
-
-        if self.loss =='mse':
-            community = create_label_sim_matrix(data)
 
         for model in self.models:
             model.reset_parameters()
@@ -92,6 +89,8 @@ class Rewirer(torch.nn.Module):
             ) + '.pt'
 
             for epoch in pbar:
+                if epoch % 10 == 0:
+                    train_dist_diff_indices = get_distance_diff_indices(community, train_mask, num_samples=sample_size)
                 model.train()
                 if self.loss in ['contrastive', 'triplet']:
                     x_hat = model.dist()
@@ -426,7 +425,8 @@ class Rewirer(torch.nn.Module):
                 D = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
                 D[triu_indices[0], triu_indices[1]] = dist
                 D = D+D.T
-                _, idx = torch.topk(dist, int(num_edges), dim=0, largest=False)
+                D.fill_diagonal_(9e15)
+                _, idx = torch.topk(D, int(num_edges), dim=0, largest=False)
                 edges = torch.stack((
                     idx.view(-1),
                     torch.arange(self.data.num_nodes, device=device).repeat_interleave(num_edges)
@@ -459,41 +459,49 @@ class Rewirer(torch.nn.Module):
         new_dataset.data.edge_index = new_edge_index
         return new_dataset
 
-    def plot_homophily_regular(self, dataset, model_indices):
+    def plot_homophily_regular(self, dataset, model_indices, mask, early_stop=True):
         with torch.no_grad():
             xi = []
             yi = []
-            ori_homo = our_homophily_measure( dataset[0].edge_index, dataset[0].y )
+            try:
+                ori_homo = our_homophily_measure(
+                    dataset[0].edge_index, dataset[0].y.where(mask, torch.tensor(-1, device=device))
+                    ).item()
+            except RuntimeError:
+                print('Error computing homophily, skipping')
+                return
+            best_num_edges = 0
+            best_homophily = 0
             triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, 1)
             dist = torch.zeros(triu_indices.shape[1], device=device)
             for model in map(self.models.__getitem__, model_indices):
                 model.to(device)
                 dist += model.dist()
-            for n_edges in range(1, 30, 1):
-                if n_edges == 0:
-                    edges = torch.tensor([[]])
-                else:
-                    for model in map(self.models.__getitem__, model_indices):
-                        dist += model.dist()
-                    _, idx = torch.topk(dist, n_edges, dim=1, largest=False)
-                    edges = to_undirected(triu_indices[:,idx])
-
-                # new_homophily = our_homophily_measure(get_masked_edges(adj, dataset[0].val_mask[:, self.split]),
-                #                           dataset[0].y[dataset[0].val_mask[:, self.split]])
-                new_homophily = our_homophily_measure(edges, dataset[0].y)
-                print("edge percent: ", n_edges, "edges before: ", dataset.data.num_edges,
-                      " edges after: ", edges.shape[1], 'homophily before:', ori_homo,
-                      'homophily after:', new_homophily)
+            D = torch.zeros(self.data.num_nodes, self.data.num_nodes)
+            D[triu_indices[0], triu_indices[1]] = dist
+            D = D + D.T
+            D.fill_diagonal_(9e15)
+            for n_edges in range(1, self.data.num_nodes-1, 1):
+                new_edge_index = self.get_rewired_edges_regular(model_indices, n_edges)
+                new_homophily = our_homophily_measure(
+                    new_edge_index, dataset[0].y.where(mask, torch.tensor(-1, device=device))
+                ).item()
+                if early_stop and new_homophily < best_homophily and best_homophily > ori_homo:
+                    break
+                if new_homophily > best_homophily:
+                    best_homophily = new_homophily
+                    best_num_edges = n_edges
                 xi.append(n_edges)
-                yi.append(new_homophily.cpu())
+                yi.append(new_homophily)
             from matplotlib import pyplot as plt
             yi = torch.tensor(yi)
-            gradient = yi[1:] - yi[:-1]
             plt.plot(xi, yi)
-            plt.plot(xi[:-1], gradient)
-            plt.axhline(y=ori_homo.cpu(), color='r', linestyle='-')
-            plt.title(dataset.name + ", model indices:" + str(model_indices))
+            plt.axhline(y=ori_homo, color='r', linestyle='-')
+            plt.title("egular " + dataset.name + ", model indices:" + str(model_indices))
             plt.show()
+
+            print('split: {}, ori_homo: {}, best_homo: {}, best_num_edges: {}'
+              .format(self.split, ori_homo, best_homophily, best_num_edges))
 
     def plot_homophily(self, dataset, model_indices, mask, early_stop=True):
         xi = []
@@ -507,8 +515,10 @@ class Rewirer(torch.nn.Module):
         best_homophily = 0
         for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, 1):
             new_edge_index = self.get_rewired_edges(model_indices, num_edges)
-            new_homophily = our_homophily_measure(new_edge_index, dataset[0].y.where(mask, torch.tensor(-1, device=device))).item()
-            if early_stop and new_homophily < best_homophily:
+            new_homophily = our_homophily_measure(
+                new_edge_index, dataset[0].y.where(mask, torch.tensor(-1, device=device))
+            ).item()
+            if early_stop and new_homophily < best_homophily and best_homophily > ori_homo:
                 break
             if new_homophily > best_homophily:
                 best_homophily = new_homophily
@@ -571,13 +581,15 @@ if __name__ == "__main__":
     parser.add_argument('--loss', type=str, default='triplet')
     parser.add_argument('--eps', type=float, default=0.1)
     parser.add_argument('--dry_run', action='store_true')
+    parser.add_argument('--sample_size', type=int, default=5)
     args = parser.parse_args()
 
     if args.loss not in ['triplet', 'contrastive', 'npair', 'mse']:
         raise RuntimeError('loss has to be one of triplet, contrastive, npair, mse')
 
-    print('Running rewire on {}, with lr={} step={} split={} mode={} lcc={} loss={} eps={} dry_run={}'
-          .format(args.dataset, args.lr, args.step, args.split, args.mode, args.lcc, args.loss, args.eps, args.dry_run))
+    print('Running rewire on {}, with lr={} step={} split={} mode={} lcc={} loss={} eps={} dry_run={} sample_size={}'
+          .format(args.dataset, args.lr, args.step, args.split, args.mode, args.lcc, args.loss, args.eps, args.dry_run,
+                  args.sample_size))
 
     DATASET = args.dataset
 
