@@ -394,25 +394,22 @@ class Rewirer(torch.nn.Module):
                 saved_model = torch.load(file_name, map_location=device)
                 model.load_state_dict(saved_model['model'])
 
-    def get_rewired_edges(self, model_indices, num_edges):
+    def get_rewired_edges(self, num_edges, A_2, dist=None, sim=None):
         with torch.no_grad():
             if self.loss in ['triplet', 'contrastive']:
                 triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, 1)
-                dist = torch.zeros(triu_indices.shape[1], device=device)
-                for model in map(self.models.__getitem__, model_indices):
-                    model.to(device)
-                    dist += model.dist()
                 _, idx = torch.topk(dist, int(num_edges), dim=0, largest=False)
                 edges = to_undirected(triu_indices[:, idx])
+                A_1 = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool()
+                A_1[edges[0], edges[1]] = True
             else:
-                sim = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
-                for model in map(self.models.__getitem__, model_indices):
-                    model.to(device)
-                    sim += model.sim().squeeze_().fill_diagonal_(0)
                 _, idx = torch.topk(sim.flatten(), int(num_edges))
                 edges = torch.tensor(np.array(np.unravel_index(idx.cpu().numpy(), sim.shape)), device=device).detach()
                 edges = to_undirected(edges)
-            return edges
+                A_1 = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool()
+                A_1[edges[0], edges[1]] = True
+            A = A_1.logical_and_(A_2)
+            return A.nonzero().T
 
     def get_rewired_edges_regular(self, model_indices, num_edges):
         with torch.no_grad():
@@ -429,7 +426,7 @@ class Rewirer(torch.nn.Module):
                 _, idx = torch.topk(D, int(num_edges), dim=0, largest=False)
                 edges = torch.stack((
                     idx.view(-1),
-                    torch.arange(self.data.num_nodes, device=device).repeat_interleave(num_edges)
+                    torch.arange(self.data.num_nodes, device=device).repeat(num_edges)
                 ), dim=0)
             else:
                 sim = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
@@ -439,18 +436,23 @@ class Rewirer(torch.nn.Module):
                 _, idx = torch.topk(sim.flatten(), int(num_edges), dim=0)
                 edges = torch.stack((
                     idx.view(-1),
-                    torch.arange(self.data.num_nodes, device=device).repeat_interleave(num_edges)
+                    torch.arange(self.data.num_nodes, device=device).repeat(num_edges)
                 ), dim=0)
             return edges
 
-    def rewire(self, dataset, model_indices, num_edges):
+    def rewire(self, dataset, model_indices, num_edges, max_node_degree=128):
         new_dataset = deepcopy(dataset)
-        new_edge_index = self.get_rewired_edges(model_indices, num_edges)
+        if self.loss in ['triplet', 'contrastive']:
+            dist, A_2 = self.get_dist_matrix(model_indices, max_node_degree)
+            new_edge_index = self.get_rewired_edges(num_edges, A_2, dist=dist)
+        else:
+            sim, A_2 = self.get_sim_matrix(model_indices, max_node_degree)
+            new_edge_index = self.get_rewired_edges(num_edges, A_2, sim=sim)
         print("edges before: ", dataset.data.num_edges, " edges after: ", new_edge_index.shape[1])
         print('homophily before:', our_homophily_measure(dataset[0].edge_index, dataset[0].y),
               'homophily after:', our_homophily_measure(new_edge_index, dataset[0].y))
-        new_edges_set = set([tuple(i) for i in new_edge_index.tolist()])
-        old_edges_set = set([tuple(i) for i in dataset[0].edge_index.tolist()])
+        new_edges_set = set([tuple(i) for i in new_edge_index.T.tolist()])
+        old_edges_set = set([tuple(i) for i in dataset[0].edge_index.T.tolist()])
         edges_added = len(new_edges_set.difference(old_edges_set))
         edges_removed = len(old_edges_set.difference(new_edges_set))
         edges_preserved = len(old_edges_set.intersection(new_edges_set))
@@ -503,7 +505,39 @@ class Rewirer(torch.nn.Module):
             print('split: {}, ori_homo: {}, best_homo: {}, best_num_edges: {}'
               .format(self.split, ori_homo, best_homophily, best_num_edges))
 
-    def plot_homophily(self, dataset, model_indices, mask, early_stop=True):
+    def get_sim_matrix(self, model_indices, max_node_degree):
+        sim = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+        for model in map(self.models.__getitem__, model_indices):
+            model.to(device)
+            sim += model.sim().squeeze_()
+        sim.fill_diagonal_(-9e15)
+        _, idx = torch.topk(sim, int(max_node_degree), dim=0, largest=True)
+        edges = torch.stack(
+            (idx.view(-1), torch.arange(self.data.num_nodes, device=device).repeat(max_node_degree)), dim=0
+        )
+        A_2 = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool()
+        A_2[edges[0], edges[1]] = True
+        return sim, A_2
+
+    def get_dist_matrix(self, model_indices, max_node_degree):
+        triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, 1)
+        dist = torch.zeros(triu_indices.shape[1], device=device)
+        for model in map(self.models.__getitem__, model_indices):
+            model.to(device)
+            dist += model.dist()
+        D = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+        D[triu_indices[0], triu_indices[1]] = dist
+        D = D + D.T
+        D.fill_diagonal_(9e15)
+        _, idx = torch.topk(D, int(max_node_degree), dim=0, largest=False)
+        edges = torch.stack(
+            (idx.view(-1), torch.arange(self.data.num_nodes, device=device).repeat(max_node_degree)), dim=0
+        )
+        A_2 = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device).bool()
+        A_2[edges[0], edges[1]] = True
+        return dist, A_2
+
+    def plot_homophily(self, dataset, model_indices, mask, early_stop=True, max_node_degree=128):
         xi = []
         yi = []
         try:
@@ -513,8 +547,18 @@ class Rewirer(torch.nn.Module):
             return
         best_num_edges = 0
         best_homophily = 0
-        for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, 1):
-            new_edge_index = self.get_rewired_edges(model_indices, num_edges)
+
+        if self.loss in ['triplet', 'contrastive']:
+            dist, A_2 = self.get_dist_matrix(model_indices, max_node_degree)
+        else:
+            sim, A_2 = self.get_sim_matrix(model_indices, max_node_degree)
+
+        for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, 100):
+            if self.loss in ['triplet', 'contrastive']:
+                new_edge_index = self.get_rewired_edges(num_edges, A_2, dist=dist)
+            else:
+                new_edge_index = self.get_rewired_edges(num_edges, A_2, sim=sim)
+
             new_homophily = our_homophily_measure(
                 new_edge_index, dataset[0].y.where(mask, torch.tensor(-1, device=device))
             ).item()

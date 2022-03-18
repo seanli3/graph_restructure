@@ -29,4 +29,8 @@ if __name__ == "__main__":
     rewirer = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split,
                      loss=args.loss, eps=args.eps)
     rewirer.load()
-    rewirer.plot_homophily(dataset, [0], dataset[0].val_mask[:, args.split] if args.split is not None else dataset[0].val_mask, early_stop=args.early_stop)
+    rewirer.plot_homophily(
+        dataset, [0],
+        dataset[0].val_mask[:, args.split] if args.split is not None else dataset[0].val_mask,
+        early_stop=args.early_stop
+    )
