@@ -23,4 +23,41 @@
 
 #CPU_ONLY=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cora --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --num_edges=1--hidden=256 --runs=10
 
-CPU_ONLY=1 python -m benchmark.node_classification.gcn --dataset=actor --rewired --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --num_edges=0 --hidden=256
+#CPU_ONLY=1 python -m benchmark.node_classification.gcn --dataset=actor --rewired --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --num_edges=0 --hidden=256
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.3 --model_indices 0 --num_edges=1790 --hidden=128 --run_split=0
+
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=5278 --hidden=512 --run_split=0
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=3938 --hidden=512 --run_split=1
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=4478 --hidden=512 --run_split=2
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=38 --hidden=512 --run_split=3
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=1308 --hidden=512 --run_split=4
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=28 --hidden=512 --run_split=5
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=18 --hidden=512 --run_split=6
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=808 --hidden=512 --run_split=7
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=78 --hidden=512 --run_split=8
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=texas --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_edges=3558 --hidden=512 --run_split=9
+
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.9 --model_indices 0 --hidden=512 --run_split=0 --num_edges=7835
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.5 --model_indices 0 --hidden=512 --run_split=1 --num_edges=1195
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --hidden=512 --run_split=2 --num_edges=2145
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --hidden=512 --run_split=3 --num_edges=9045
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --hidden=512 --run_split=4 --num_edges=1085
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --hidden=512 --run_split=5 --num_edges=2405
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --hidden=512 --run_split=6 --num_edges=65
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.9 --model_indices 0 --hidden=512 --run_split=7 --num_edges=135
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --hidden=512 --run_split=8 --num_edges=685
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=wisconsin --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --hidden=512 --run_split=9 --num_edges=115
+
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --hidden=512 --run_split=0 --num_edges=168
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --hidden=512 --run_split=1 --num_edges=28
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --hidden=512 --run_split=2 --num_edges=28
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --hidden=512 --run_split=3 --num_edges=28
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --hidden=512 --run_split=4 --num_edges=138
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --hidden=512 --run_split=5 --num_edges=58
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.5 --model_indices 0 --hidden=512 --run_split=6 --num_edges=48
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --hidden=512 --run_split=7 --num_edges=388
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.2 --dropout=0.1 --model_indices 0 --hidden=512 --run_split=8 --num_edges=38
+#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cornell --rewired --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --hidden=512 --run_split=9 --num_edges=28
+
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=citeseer --rewirer_step=0.1 --dropout=0.9 --model_indices 0 --hidden=128 --lcc --num_edges=7358 --run_split=0
+#CUDA_DEVICE=1 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.gcn --dataset=cora --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --hidden=512 --lcc --num_edges=10138 --run_split=0
