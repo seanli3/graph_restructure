@@ -10,6 +10,7 @@ from tqdm import tqdm
 import argparse
 from config import SAVED_MODEL_DIR_NODE_CLASSIFICATION, USE_CUDA, DEVICE
 from copy import deepcopy
+from sklearn.utils import gen_batches
 
 device = DEVICE
 
@@ -28,16 +29,14 @@ class Rewirer(torch.nn.Module):
         self.eps = eps
         self.dry_run = dry_run
 
-        random_signals = get_random_signals(data.num_nodes)
-
         if mode == 'unsupervised':
             self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
-            self.struct_sim_model = SpectralSimilarityEncoder(data, random_signals, step=step, name='struct', exact=exact)
+            self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, name='struct', exact=exact)
             self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv", exact=exact)
             self.models = [self.fea_sim_model, self.struct_sim_model]
         else:
             # self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
-            self.struct_sim_model = SpectralSimilarityEncoder(data, torch.cat((data.x, random_signals), dim=1), step=step, name='struct', exact=exact)
+            self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, name='struct', exact=exact)
             # self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
             self.models = [self.struct_sim_model]
 
@@ -62,17 +61,23 @@ class Rewirer(torch.nn.Module):
         data = self.data
         # community_mask = create_label_sim_matrix(data).bool()
         community = create_label_sim_matrix(data)
-        val_dist_diff_indices = get_distance_diff_indices(community, val_mask, num_samples=sample_size)
+        train_idx = train_mask.nonzero().view(-1)
+        val_idx = val_mask.nonzero().view(-1)
 
         if self.loss == 'npair':
             train_positive_nodes = sample_positive_nodes_dict(train_mask, self.data.y, 1)
             train_negative_nodes = sample_negative_nodes_dict(train_mask, self.data.y, (self.data.y.max().item() + 1) * 2)
             val_positive_nodes = sample_positive_nodes_dict(val_mask, self.data.y, 1)
             val_negative_nodes = sample_negative_nodes_dict(val_mask, self.data.y, (self.data.y.max().item() + 1) * 2)
+        else:
+            train_negative_nodes = None
+            train_positive_nodes = None
+            val_positive_nodes = None
+            val_negative_nodes = None
 
         for model in self.models:
             model.reset_parameters()
-            best_loss = float('inf')
+            best_loss_mean = float('inf')
             best_model = {}
             bad_counter = 0
 
@@ -88,51 +93,42 @@ class Rewirer(torch.nn.Module):
                 self.DATASET.lower(), self.mode, model.name, self.loss, self.eps, self.split
             ) + '.pt'
 
+            # batch_size = data.num_nodes
+            batch_size = 256
+
             for epoch in pbar:
-                if epoch % 10 == 0:
-                    train_dist_diff_indices = get_distance_diff_indices(community, train_mask, num_samples=sample_size)
-                model.train()
-                if self.loss in ['contrastive', 'triplet']:
-                    x_hat = model.dist()
-                elif self.loss in ['mse']:
-                    x_hat = model.sim()
-                elif self.loss in ['npair']:
-                    x_hat = model()
+                train_losses = []
+                val_losses = []
 
-                if self.loss == 'contrastive':
-                    loss = model.dist_contrastive_loss(x_hat, train_dist_diff_indices, self.eps)
-                elif self.loss == 'triplet':
-                    loss = model.dist_triplet_loss(x_hat, train_dist_diff_indices, self.eps)
-                elif self.loss == 'mse':
-                    loss = model.sim_mse_loss(x_hat, community, train_mask)
-                elif self.loss == 'npair':
-                    loss = model.sim_npair_loss(x_hat, train_positive_nodes, train_negative_nodes, train_mask)
+                # Training
+                batches = gen_batches(train_idx.shape[0], batch_size, min_batch_size=1)
+                for batch_num, batch in enumerate(batches):
+                    train_loss = self.train_batch(community, model, optimizer, sample_size, train_idx[batch],
+                                                  train_mask[batch], train_negative_nodes, train_positive_nodes)
+                    train_losses.append(train_loss.item())
 
-                if optimizer is not None:
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+                # Validation
+                batches = gen_batches(val_idx.shape[0], batch_size, min_batch_size=1)
+                for batch in batches:
+                    val_loss = self.val_batch(community, model, sample_size, val_idx[batch],
+                                              val_mask[batch], val_negative_nodes, val_positive_nodes)
+                    val_losses.append(val_loss.item())
 
-                model.eval()
+                # Compute loss
+                train_loss_mean = torch.tensor(train_losses).mean().item()
+                val_loss_mean = torch.tensor(val_losses).mean().item()
+                pbar.set_description('Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(
+                    epoch, train_loss_mean, val_loss_mean)
+                )
 
-                if self.loss == 'contrastive':
-                    val_loss = model.dist_contrastive_loss(x_hat, val_dist_diff_indices)
-                elif self.loss == 'triplet':
-                    val_loss = model.dist_triplet_loss(x_hat, val_dist_diff_indices)
-                elif self.loss == 'mse':
-                    val_loss = model.sim_mse_loss(x_hat, community, val_mask)
-                elif self.loss == 'npair':
-                    val_loss = model.sim_npair_loss(x_hat, val_positive_nodes, val_negative_nodes, val_mask)
-
-                pbar.set_description('Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(epoch, loss.item(), val_loss.item()))
-
-                if val_loss < best_loss:
-                    best_model['train_loss'] = loss
-                    best_model['val_loss'] = val_loss
+                # Epoch finish
+                if val_loss_mean < best_loss_mean:
+                    best_model['train_loss'] = train_loss_mean
+                    best_model['val_loss'] = val_loss_mean
                     best_model['epoch'] = epoch
                     best_model['step'] = step
                     best_model['model'] = deepcopy(model.state_dict())
-                    best_loss = val_loss
+                    best_loss_mean = val_loss_mean
                     bad_counter = 0
                     if not self.dry_run:
                         torch.save(
@@ -142,12 +138,58 @@ class Rewirer(torch.nn.Module):
                     bad_counter += 1
                     if bad_counter == patience:
                         break
-
             print(
                 'Model saved for Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(
-                    best_model['epoch'], best_model['train_loss'].item(), best_model['val_loss'].item()
+                    best_model['epoch'], best_model['train_loss'], best_model['val_loss']
                 )
             )
+
+    def val_batch(self, community, model, sample_size, val_idx, val_mask, val_negative_nodes,
+                  val_positive_nodes):
+        val_dist_diff_indices = get_distance_diff_indices(
+            community[val_idx, :][:, val_idx], num_samples=sample_size
+        )
+        model.eval()
+        if self.loss in ['contrastive', 'triplet']:
+            x_hat = model.dist(val_idx)
+        elif self.loss in ['mse']:
+            x_hat = model.sim(val_idx)
+        elif self.loss in ['npair']:
+            x_hat = model()
+        if self.loss == 'contrastive':
+            val_loss = model.dist_contrastive_loss(x_hat, val_dist_diff_indices)
+        elif self.loss == 'triplet':
+            val_loss = model.dist_triplet_loss(x_hat, val_dist_diff_indices, val_idx.shape[0], self.eps)
+        elif self.loss == 'mse':
+            val_loss = model.sim_mse_loss(x_hat, community, val_mask)
+        elif self.loss == 'npair':
+            val_loss = model.sim_npair_loss(x_hat, val_positive_nodes, val_negative_nodes, val_mask)
+        return val_loss
+
+    def train_batch(self, community, model, optimizer, sample_size, train_idx, train_mask,
+                    train_negative_nodes, train_positive_nodes):
+        train_dist_diff_indices = get_distance_diff_indices(
+            community[train_idx, :][:, train_idx], num_samples=sample_size
+        )
+        model.train()
+        optimizer.zero_grad()
+        if self.loss in ['contrastive', 'triplet']:
+            x_hat = model.dist(train_idx)
+        elif self.loss in ['mse']:
+            x_hat = model.sim(train_idx)
+        elif self.loss in ['npair']:
+            x_hat = model()
+        if self.loss == 'contrastive':
+            train_loss = model.dist_contrastive_loss(x_hat, train_dist_diff_indices, self.eps)
+        elif self.loss == 'triplet':
+            train_loss = model.dist_triplet_loss(x_hat, train_dist_diff_indices, train_idx.shape[0], self.eps)
+        elif self.loss == 'mse':
+            train_loss = model.sim_mse_loss(x_hat, community, train_mask)
+        elif self.loss == 'npair':
+            train_loss = model.sim_npair_loss(x_hat, train_positive_nodes, train_negative_nodes, train_mask)
+        train_loss.backward()
+        optimizer.step()
+        return train_loss
 
     def train_supervised_kmeans(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask):
         data = self.data
@@ -440,7 +482,7 @@ class Rewirer(torch.nn.Module):
                 ), dim=0)
             return edges
 
-    def rewire(self, dataset, model_indices, num_edges, max_node_degree=128):
+    def rewire(self, dataset, model_indices, num_edges, max_node_degree=10):
         new_dataset = deepcopy(dataset)
         if self.loss in ['triplet', 'contrastive']:
             dist, A_2 = self.get_dist_matrix(model_indices, max_node_degree)
@@ -537,7 +579,7 @@ class Rewirer(torch.nn.Module):
         A_2[edges[0], edges[1]] = True
         return dist, A_2
 
-    def plot_homophily(self, dataset, model_indices, mask, early_stop=True, max_node_degree=128):
+    def plot_homophily(self, dataset, model_indices, mask, early_stop=True, max_node_degree=10):
         xi = []
         yi = []
         try:
@@ -553,7 +595,7 @@ class Rewirer(torch.nn.Module):
         else:
             sim, A_2 = self.get_sim_matrix(model_indices, max_node_degree)
 
-        for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, 100):
+        for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, 10):
             if self.loss in ['triplet', 'contrastive']:
                 new_edge_index = self.get_rewired_edges(num_edges, A_2, dist=dist)
             else:
@@ -648,9 +690,9 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(seed)
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    dataset = get_dataset(DATASET, normalize_features=True, lcc=args.lcc)
+    dataset = get_dataset(DATASET, normalize_features=True, lcc=args.lcc, split="public")
     data = dataset[0]
 
     module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split,
                      exact=args.exact, loss=args.loss, eps=args.eps, dry_run=args.dry_run)
-    module.train(epochs=100000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step)
+    module.train(epochs=10000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step, sample_size=args.sample_size)

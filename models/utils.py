@@ -358,21 +358,24 @@ def neumann_inv(m, k):
     ret = I
     for l in range(k):
         ret = ret.matmul(I + (I-m).matrix_power(int(math.pow(2,l))))
+    if ret.isnan().any() or ret.isinf().any():
+        raise RuntimeError('NaN or Inf in Neumann approximation, try reduce order')
     return ret
 
 
 # This new rational approximator does not show any advatanges so far
-def create_filter(laplacian, step, order=2, neumann_order=25):
+def create_filter(laplacian, step, order=3, neumann_order=10):
     num_nodes = laplacian.shape[0]
-    a = torch.arange(0, 2+step, step, device=device).view(-1, 1, 1)
+    a = torch.arange(-step/2, 2-step/2, step, device=device).view(-1, 1, 1)
     s = 4/step
     m = order*2
     e = 2*math.pow(s, 2*m)/(math.pow(s, 2*m)-1)-2 + 1e-6
 
     if len(laplacian.shape) > 1:
         I = torch.eye(num_nodes, device=device)
-        B = ((laplacian - a * I).matmul(I / (2 + e))).matrix_power(m) + I / math.pow(s, m)
+        B = ((laplacian - a * I) / (2 + e)).matrix_power(m) + I / math.pow(s, m)
         ret = neumann_inv(B, neumann_order)
+        # ret = B.matrix_power(-1)
         ret = (I / math.pow(s, m)).matmul(ret)
     else:
         ret = 1/s.pow(m)*(((laplacian - a)/(2+e)).pow(m) + 1/s.pow(m)).pow(-1)
@@ -614,17 +617,18 @@ def get_adj(edge_index, edge_weight, num_nodes):
 
 
 def get_random_signals(num_nodes, size=None, epsilon=0.25):
-    if size is None:
-        random_signal_size = math.floor(
-            6 / (math.pow(epsilon, 2) / 2 - math.pow(epsilon, 3) / 3) * math.log(num_nodes)
+    with torch.no_grad():
+        if size is None:
+            random_signal_size = math.floor(
+                6 / (math.pow(epsilon, 2) / 2 - math.pow(epsilon, 3) / 3) * math.log(num_nodes)
+            )
+        else:
+            random_signal_size = size
+        random_signal = torch.normal(
+            0, math.sqrt(1 / random_signal_size), size=(num_nodes, random_signal_size),
+            device=device, generator=torch.Generator(device).manual_seed(SEED)
         )
-    else:
-        random_signal_size = size
-    random_signal = torch.normal(
-        0, math.sqrt(1 / random_signal_size), size=(num_nodes, random_signal_size),
-        device=device, generator=torch.Generator(device).manual_seed(SEED)
-    )
-    return random_signal
+        return random_signal
 
 
 def create_label_sim_matrix(data):
@@ -635,13 +639,13 @@ def create_label_sim_matrix(data):
     return community
 
 
-def get_distance_diff_indices(community, mask, num_samples=5):
+def get_distance_diff_indices(community, num_samples=5):
     indices = []
     for i in range(community.shape[0]):
-        intra_class = community[i].bool().logical_and(mask).nonzero().view(-1).tolist()
+        intra_class = community[i].bool().nonzero().view(-1).tolist()
         inverse_comm = community[i].bool().logical_not()
         inverse_comm[i] = False
-        inter_class = inverse_comm.logical_and(mask).nonzero().view(-1).tolist()
+        inter_class = inverse_comm.nonzero().view(-1).tolist()
         if len(inter_class) > 0 and len(intra_class)> 0:
             intra_class = np.random.choice(intra_class, num_samples)
             inter_class = np.random.choice(inter_class, num_samples)

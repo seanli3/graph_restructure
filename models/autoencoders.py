@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from .utils import create_filter, dot_product
 from config import DEVICE
 import itertools
+from models.utils import get_random_signals
 
 device = DEVICE
 
@@ -57,7 +58,7 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
-    def __init__(self, data, x, step, name, exact):
+    def __init__(self, data, step, name, exact):
         super(SpectralSimilarityEncoder, self).__init__()
         self.name = name
         self.step = step
@@ -70,9 +71,11 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         else:
             self.D = create_filter(L, self.step).permute(1, 2, 0)
         self.data = data
+        random_signals = get_random_signals(data.num_nodes, data.num_features)
+        self.x = torch.cat((data.x, random_signals), dim=1)
 
         self.A = None
-        self.windows = math.ceil((2+self.step)/self.step)
+        self.windows = math.ceil(2/self.step)
 
         if exact:
             self.layers = nn.Sequential(
@@ -87,7 +90,6 @@ class SpectralSimilarityEncoder(torch.nn.Module):
                 nn.Linear(32, 1, bias=False),
             )
         self.layers.to(device)
-        self.x = x
 
         self.outputs = {}
 
@@ -96,26 +98,33 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             self.outputs[name] = output
         return hook
 
-    def sim(self):
-        return dot_product(self())
+    def sim(self, batch):
+        return dot_product(self(batch))
 
-    def dist(self):
-        return torch.nn.functional.pdist(self(), p=2)
+    def dist(self,batch=None):
+        return torch.nn.functional.pdist(self(batch), p=2)
 
-    def forward(self, input_weights=None):
+    def forward(self, batch, input_weights=None):
         if input_weights is not None:
-            x_D = self.D.mul(input_weights)
+            if batch is not None:
+                x_D = self.D.mul(input_weights)[batch, :, :][:, batch, :]
+                x = self.x[batch]
+            else:
+                x_D = self.D.mul(input_weights)
+                x = self.x
         else:
-            x_D = self.D
+            if batch is not None:
+                x_D = self.D[batch, :, :][:, batch, :]
+                x = self.x[batch]
+            else:
+                x_D = self.D
+                x = self.x
 
         L_hat = self.layers(x_D).squeeze()
-        # L_hat = self.layers(x_D.permute(0, 1, 2).view(self.windows, 1, -1)).squeeze()
         if self.exact:
             x_hat = L_hat
         else:
-            x_hat = L_hat.matmul(self.x)
-        # return self.dist(x_hat, p=1)
-        # x_hat = torch.nn.functional.normalize(x_hat, p=2, dim=1)
+            x_hat = L_hat.matmul(x)
         return x_hat
 
     def reset_parameters(self):
@@ -151,9 +160,9 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         loss = -torch.log(positive_loss/(positive_loss + negative_loss_sum))
         return loss.sum()
 
-    def dist_triplet_loss(self, d, dist_diff_indices, eps=0.05):
-        triu_indices = torch.triu_indices(row=self.data.num_nodes, col=self.data.num_nodes, offset=1, device=device)
-        dist = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+    def dist_triplet_loss(self, d, dist_diff_indices, batch_size, eps=0.05):
+        triu_indices = torch.triu_indices(row=batch_size, col=batch_size, offset=1, device=device)
+        dist = torch.zeros(batch_size, batch_size, device=device)
         dist[triu_indices[0], triu_indices[1]] = d.pow(2)
         dist = dist + dist.T
         intra_class_edge_indices = dist_diff_indices[:, 0].T
