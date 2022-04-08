@@ -61,5 +61,4 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --heads=8 --hidden=64 --run_split=6 --num_edges=1005
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --heads=8 --hidden=64 --run_split=7 --num_edges=1509
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --heads=8 --hidden=64 --run_split=8 --num_edges=252
-
-CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.5 --model_indices 0 --heads=8 --hidden=256 --run_split=9 --num_edges=252
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.5 --model_indices 0 --heads=8 --hidden=256 --run_split=9 --num_edges=252
