@@ -53,4 +53,14 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Wisconsin --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=7 --num_edges=503
 #CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Wisconsin --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=8 --num_edges=252
 #CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Wisconsin --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=9 --num_edges=1761
-#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Wisconsin --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=9 --num_edges=2012
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=0 --num_edges=263
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=1 --num_edges=2367
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=2 --num_edges=90
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=3 --num_edges=22
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=4 --num_edges=1315
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=5 --num_edges=1315
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=6 --num_edges=516
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=7 --num_edges=789
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=8 --num_edges=1578
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --K=1 --run_split=9 --num_edges=45

@@ -14,7 +14,7 @@ parser.add_argument('--epochs', type=int, default=200)
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--seed', type=int, default=729, help='Random seed.')
 parser.add_argument('--weight_decay', type=float, default=0.0005)
-parser.add_argument('--patience', type=int, default=10)
+parser.add_argument('--patience', type=int, default=100)
 parser.add_argument('--hidden', type=int, default=16)
 parser.add_argument('--dropout', type=float, default=0.5)
 parser.add_argument('--lcc', type=bool, default=False)
@@ -31,7 +31,6 @@ parser.add_argument('--run_split', type=int, default=None)
 parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
 
 args = parser.parse_args()
-
 
 
 rseed(args.seed)

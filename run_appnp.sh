@@ -65,3 +65,14 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --K=1 --alpha=0.5 --hidden=1024 --run_split=7 --num_edges=1509
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --K=1 --alpha=0.9 --hidden=1024 --run_split=8 --num_edges=252
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --K=1 --alpha=0.6 --hidden=1024 --run_split=9 --num_edges=252
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.5 --K=3 --alpha=0.3 --hidden=512 --run_split=0 --num_edges=263
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.4 --K=1 --alpha=0.8 --hidden=512 --run_split=1 --num_edges=2367
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --K=1 --alpha=0.8 --hidden=512 --run_split=2 --num_edges=90
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.6 --K=1 --alpha=0.8 --hidden=512 --run_split=3 --num_edges=22
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --K=1 --alpha=0.8 --hidden=512 --run_split=4 --num_edges=1315
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --K=1 --alpha=0.5 --hidden=512 --run_split=5 --num_edges=1315
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.8 --K=1 --alpha=0.7 --hidden=512 --run_split=6 --num_edges=516
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --K=1 --alpha=0.8 --hidden=512 --run_split=7 --num_edges=789
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.8 --K=1 --alpha=0.8 --hidden=512 --run_split=8 --num_edges=1578
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.8 --K=1 --alpha=0.8 --hidden=512 --run_split=9 --num_edges=45
