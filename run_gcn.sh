@@ -98,3 +98,14 @@
 # CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Squirrel --rewired --rewirer_step=0.1 --dropout=0.4 --model_indices 0 --hidden=256 --run_split=7 --num_edges=80630
 # CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Squirrel --rewired --rewirer_step=0.1 --dropout=0.4 --model_indices 0 --hidden=256 --run_split=8 --num_edges=80630
 # CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Squirrel --rewired --rewirer_step=0.1 --dropout=0.4 --model_indices 0 --hidden=256 --run_split=9 --num_edges=80630
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.9 --hidden=2048 --run_split=0 --num_edges=263
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.8 --hidden=2048 --run_split=1 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.6 --hidden=512 --run_split=2 --num_edges=263
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.5 --hidden=512 --run_split=3 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.7 --hidden=512 --run_split=4 --num_edges=90
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.5 --hidden=2048 --run_split=5 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.7 --hidden=2048 --run_split=6 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.6 --hidden=2048 --run_split=7 --num_edges=789
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.7 --hidden=512 --run_split=8 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.8 --hidden=2048 --run_split=9 --num_edges=10
