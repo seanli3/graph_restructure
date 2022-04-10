@@ -64,12 +64,12 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.5 --model_indices 0 --heads=8 --hidden=256 --run_split=9 --num_edges=252
 
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.6 --heads=10 --hidden=512 --run_split=0 --num_edges=263
-#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --heads=10 --hidden=1024 --run_split=1 --num_edges=2367
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --heads=10 --hidden=1024 --run_split=1 --num_edges=1789
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.5 --heads=10 --hidden=512 --run_split=2 --num_edges=90
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --heads=10 --hidden=256 --run_split=3 --num_edges=22
-#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --heads=12 --hidden=512 --run_split=4 --num_edges=1315
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --heads=12 --hidden=512 --run_split=4 --num_edges=10
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --heads=10 --hidden=512 --run_split=5 --num_edges=1315
-#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.6 --heads=10 --hidden=512 --run_split=6 --num_edges=516
+#CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.6 --heads=10 --hidden=512 --run_split=6 --num_edges=10
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.4 --heads=10 --hidden=512 --run_split=7 --num_edges=789
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --heads=10 --hidden=512 --run_split=8 --num_edges=1578
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gat --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.4 --heads=10 --hidden=512 --run_split=9 --num_edges=45

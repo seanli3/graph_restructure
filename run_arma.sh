@@ -16,17 +16,6 @@
 #CPU_ONLY=1 python -m benchmark.node_classification.arma --dataset=actor --rewired --rewirer_step=0.1 --dropout=0.4 --model_indices 0 --num_edges=0 --num_stacks=1 --num_layers=1 --hidden=128 --skip_dropout=0.3
 #CUDA_DEVICE=2 python -m benchmark.node_classification.arma --dataset=actor --rewirer_step=0.1 --dropout=0.9 --model_indices 0 --num_edges=0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3
 
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.5 --model_indices 0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=0 --num_edges=5278
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.8 --model_indices 0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=1 --num_edges=3938
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --num_stacks=1 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=2 --num_edges=4478
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --num_stacks=3 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=3 --num_edges=38
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.3 --model_indices 0 --num_stacks=4 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=4 --num_edges=1308
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=5 --num_edges=28
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=6 --num_edges=18
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --num_stacks=1 --num_layers=1 --hidden=128 --skip_dropout=0.2 --run_split=7 --num_edges=808
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.2 --model_indices 0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=8 --num_edges=78
-#CUDA_DEVICE=2 /data_seoul/seanl/miniconda/envs/rewire/bin/python -m benchmark.node_classification.arma --dataset=texas --rewirer_step=0.1 --dropout=0.7 --model_indices 0 --num_stacks=2 --num_layers=1 --hidden=128 --skip_dropout=0.3 --run_split=9 --num_edges=3558
-
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=CiteSeer --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.8 --num_stacks=2 --hidden=512 --num_edges=7800 --runs=10 --num_layers=1 --skip_dropout=0.3
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Cora --rewirer_step=0.1 --model_indices 0 --dropout=0.9  --num_stacks=6 --hidden=512 --num_edges=7800 --runs=10 --num_layers=1 --skip_dropout=0.6
 
@@ -50,7 +39,7 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --num_stacks=1 --num_layers=1 --skip_dropout=0.6 --hidden=512 --run_split=5 --num_edges=1315
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.4 --num_stacks=1 --num_layers=1 --skip_dropout=0.8 --hidden=512 --run_split=6 --num_edges=516
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.9 --num_stacks=1 --num_layers=1 --skip_dropout=0.1 --hidden=512 --run_split=7 --num_edges=789
-#CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.4 --num_stacks=1 --num_layers=1 --skip_dropout=0.5 --hidden=128 --run_split=8 --num_edges=1578
+#CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.4 --num_stacks=1 --num_layers=1 --skip_dropout=0.5 --hidden=128 --run_split=8 --num_edges=516
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Texas --rewired --rewirer_step=0.2 --model_indices 0 --dropout=0.7 --num_stacks=1 --num_layers=1 --skip_dropout=0.5 --hidden=512 --run_split=9 --num_edges=45
 
 #CUDA_DEVICE=1 python -m benchmark.node_classification.arma --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --num_stacks=1 --num_layers=1 --skip_dropout=0.6 --hidden=128 --run_split=0 --num_edges=263
