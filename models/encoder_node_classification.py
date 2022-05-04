@@ -589,13 +589,14 @@ class Rewirer(torch.nn.Module):
             return
         best_num_edges = 0
         best_homophily = 0
+        actual_num_edges = 0
 
         if self.loss in ['triplet', 'contrastive']:
             dist, A_2 = self.get_dist_matrix(model_indices, max_node_degree)
         else:
             sim, A_2 = self.get_sim_matrix(model_indices, max_node_degree)
 
-        for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, 10):
+        for num_edges in torch.arange(1, dataset[0].num_nodes*(dataset[0].num_nodes-1)//2, dataset[0].num_nodes):
             if self.loss in ['triplet', 'contrastive']:
                 new_edge_index = self.get_rewired_edges(num_edges, A_2, dist=dist)
             else:
@@ -609,6 +610,7 @@ class Rewirer(torch.nn.Module):
             if new_homophily > best_homophily:
                 best_homophily = new_homophily
                 best_num_edges = num_edges
+                actual_num_edges = new_edge_index.shape[1]
             xi.append(num_edges.item())
             yi.append(new_homophily)
         from matplotlib import pyplot as plt
@@ -618,8 +620,8 @@ class Rewirer(torch.nn.Module):
         plt.title(dataset.name + ", model indices:" + str(model_indices) + ", split:" + str(self.split))
         plt.show()
 
-        print('split: {}, ori_homo: {}, best_homo: {}, best_num_edges: {}'
-              .format(self.split, ori_homo, best_homophily, best_num_edges))
+        print('split: {}, ori_homo: {}, best_homo: {}, best_num_edges: {}, actual_num_edges: {}'
+              .format(self.split, ori_homo, best_homophily, best_num_edges, actual_num_edges))
 
     def kmeans(self, model_indices, split):
         from kmeans_pytorch import kmeans

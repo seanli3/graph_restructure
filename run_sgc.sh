@@ -75,3 +75,37 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=7 --num_edges=789
 #CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=8 --num_edges=10
 #CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=9 --num_edges=10
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=0 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=1 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=2 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=3 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=4 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=5 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=6 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=7 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=8 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=9 --num_edges=1
+
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=0 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=1 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=2 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=3 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=4 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=5 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=6 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=7 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=8 --num_edges=300000 --max_node_degree=5
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=9 --num_edges=300000 --max_node_degree=5
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=0 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=1 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=2 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=2 --run_split=3 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=4 --num_edges=300000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=5 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=6 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=7 --num_edges=1000000 --max_node_degree=15
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=8 --num_edges=800000 --max_node_degree=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.sgc --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --K=1 --run_split=9 --num_edges=800000 --max_node_degree=10

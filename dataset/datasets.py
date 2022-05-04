@@ -122,6 +122,7 @@ def get_dataset(name, normalize_features=False, transform=None,
         dataset = WikipediaNetwork(path, name, True)
     elif name.lower() in ['actor']:
         dataset = Actor(path)
+        dataset.name = 'actor'
     else:
         dataset = PygNcDataset(name=name, root=path, transform=T.ToSparseTensor())
 

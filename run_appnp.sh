@@ -87,3 +87,36 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.8 --K=2 --alpha=0.1 --hidden=1024 --run_split=7 --num_edges=789
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.7 --K=1 --alpha=0.7 --hidden=512 --run_split=8 --num_edges=10
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Cornell --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.6 --K=1 --alpha=0.8 --hidden=1024 --run_split=9 --num_edges=10
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=3 --alpha=0.3 --hidden=256 --run_split=0 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.2 --K=3 --alpha=0.8 --hidden=128 --run_split=1 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.3 --hidden=1024 --run_split=2 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.8 --hidden=1024 --run_split=3 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.8 --hidden=512 --run_split=4 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.3 --hidden=128 --run_split=5 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.7 --hidden=256 --run_split=6 --num_edges=10
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=2 --alpha=0.1 --hidden=1024 --run_split=7 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.7 --hidden=256 --run_split=8 --num_edges=1
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Actor --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.8 --hidden=512 --run_split=9 --num_edges=1
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=0 --num_edges=200000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=1 --num_edges=200000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.2 --K=1 --alpha=0.1 --hidden=256 --run_split=2 --num_edges=520000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=512 --run_split=3 --num_edges=980000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=4 --num_edges=200000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=2 --alpha=0.1 --hidden=256 --run_split=5 --num_edges=200000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=6 --num_edges=200000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=2 --alpha=0.2 --hidden=1024 --run_split=7 --num_edges=200000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.1 --hidden=512 --run_split=8 --num_edges=420000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Squirrel --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.5 --K=1 --alpha=0.2 --hidden=128 --run_split=9 --num_edges=200000
+
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=0 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=1 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.5 --K=4 --alpha=0.2 --hidden=1024 --run_split=2 --num_edges=400000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=3 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.6 --K=8 --alpha=0.1 --hidden=1024 --run_split=4 --num_edges=1000000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.2 --K=1 --alpha=0.2 --hidden=1024 --run_split=5 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.1 --hidden=1024 --run_split=6 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=128 --run_split=7 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=8 --num_edges=700000
+#CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.6 --K=4 --alpha=0.2 --hidden=1024 --run_split=9 --num_edges=1000000

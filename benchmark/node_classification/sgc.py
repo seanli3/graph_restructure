@@ -21,6 +21,7 @@ parser.add_argument('--rewired', action='store_true')
 parser.add_argument('--num_edges', type=float, default=3000)
 parser.add_argument('--rewirer_mode', type=str, default='supervised')
 parser.add_argument('--rewirer_step', type=float, default=0.2)
+parser.add_argument('--max_node_degree', type=int, default=10)
 parser.add_argument('--run_split', type=int, default=None)
 parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
 
@@ -47,5 +48,6 @@ class Net(torch.nn.Module):
         return F.log_softmax(x, dim=1), None
 
 
-run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience, run_split=args.run_split,
-    num_edges=args.num_edges, model_indices=args.model_indices, rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step)
+run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
+    run_split=args.run_split, num_edges=args.num_edges, model_indices=args.model_indices,
+    rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step, max_node_degree=args.max_node_degree)
