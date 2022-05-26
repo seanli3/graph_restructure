@@ -130,3 +130,20 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.4 --hidden=1024 --run_split=7 --num_edges=400000
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --hidden=256 --run_split=8 --num_edges=400000
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --hidden=1024 --run_split=9 --num_edges=700000
+
+#
+#echo 'edges h_den h_den_train h_den_val h_den_test h_edge h_node h_norm degree density train_acc test_acc val_acc train_acc_std test_acc_std val_acc_std'
+#for edges in `seq 1 1000 2000000`
+#do
+#  CUDA_DEVICE=0 python -m benchmark.node_classification.gcn \
+#    --dataset=Squirrel\
+#    --rewired \
+#    --rewirer_step=0.1 \
+#    --model_indices 0 \
+#    --dropout=0.3 \
+#    --runs=5 \
+#    --hidden=1024 \
+#    --run_split=0 \
+#    --num_edges=$edges\
+#    --max_node_degree=5000
+#  done

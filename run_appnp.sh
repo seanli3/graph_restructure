@@ -120,3 +120,20 @@
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=128 --run_split=7 --num_edges=700000
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.3 --K=1 --alpha=0.2 --hidden=1024 --run_split=8 --num_edges=700000
 #CUDA_DEVICE=1 python -m benchmark.node_classification.appnp --dataset=Chameleon --rewired --rewirer_step=0.1 --model_indices 0 --dropout=0.6 --K=4 --alpha=0.2 --hidden=1024 --run_split=9 --num_edges=1000000
+
+#for edges in `seq 1 1000 300000`
+#do
+#  CUDA_DEVICE=0 python -m benchmark.node_classification.appnp \
+#    --dataset=Squirrel \
+#    --rewired \
+#    --rewirer_step=0.1 \
+#    --model_indices 0 \
+#    --K=1 \
+#    --dropout=0.3 \
+#    --alpha=0.2 \
+#    --hidden=1024 \
+#    --runs=5 \
+#    --run_split=0 \
+#    --num_edges=$edges\
+#    --max_node_degree=5000
+#done
