@@ -25,6 +25,6 @@ if USE_CUDA and torch.cuda.is_available():
     if device is None:
         device = '0'
     DEVICE = torch.device('cuda:'+device)
-    print('Using device:' + str(DEVICE))
+    # print('Using device:' + str(DEVICE))
 
 torch.set_num_threads(60)
