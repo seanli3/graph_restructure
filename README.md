@@ -1,10 +1,26 @@
-# PyTorch Geometric Benchmark Suite
-
-This benchmark suite provides evaluation scripts for **[semi-supervised node classification](https://github.com/rusty1s/pytorch_geometric/tree/master/benchmark/citation)**, **[graph classification](https://github.com/rusty1s/pytorch_geometric/tree/master/benchmark/kernel)**, and **[point cloud classification](https://github.com/rusty1s/pytorch_geometric/tree/master/benchmark/points)** and **[runtimes](https://github.com/rusty1s/pytorch_geometric/tree/master/benchmark/runtime)** in order to compare various methods in homogeneous evaluation scenarios.
-In particular, we take care to avoid to perform hyperparameter and model selection on the test set and instead use an additional validation set.
+# Restructuring Graph for Higher Homophily via Learnable Spectral Clusterin
 
 ## Installation
 
+The following dependencies are required
+
+```txt
+jupyter>=1.0.0
+networkx=2.7.1
+numpy=1.21.2
+pandas=1.4.1
+pyg=2.0.4
+python=3.9.7
+pytorch=1.11.0
+scikit-learn=1.0.2
+scipy=1.7.3
+seaborn=0.11.2
+torchaudio=0.11.0
+torchvision=0.12.0
 ```
-$ python setup.py install
-```
+
+## Main results
+To reproduce results in Table 1, Figure 5 and Figure 6, open the relevant `run_*.sh` file, uncomment the lines you want to run and execute the script
+
+## Appendix
+To reproduce results of Figure 7, Table 3 and Figure 8, run `spectral_analysis.py` in the `appendix` directory.
