@@ -85,26 +85,22 @@ def our_homophily_measure(edge_index, label):
     our measure \hat{h}
     treats negative labels as unlabeled
     """
-    c = label.max() + 1
     label = label.squeeze()
     H = compat_matrix_edge_idx(edge_index, label)
     nonzero_label = label[label >= 0]
     counts = nonzero_label.unique(return_counts=True)[1].float()
-    num_edges = edge_index.shape[1]
-    num_nodes = label.shape[0]
-    density = 2*num_edges/num_nodes/(num_nodes+1)
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
     complete_graph_edges = complete_graph_edges + torch.diag(counts)
     try:
         h = H/complete_graph_edges
     except RuntimeError as e:
         print('Missing labels')
-        raise e
+        return torch.tensor(0)
     h_homo = h.diag()
     h_hete = (h.triu(1) + h.tril(-1)).mean(1)
     # ret = max(h_hete, h_homo) * (h_homo - h_hete) / density
     # return 1 / (1 + torch.exp(- ret))
-    return (h_homo - h_hete).mean()/2+0.5
+    return (h_homo - h_hete).min()/2+0.5
 
 
     # complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
