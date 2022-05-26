@@ -35,28 +35,24 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
         torch.manual_seed(SEED)
 
         if device == torch.device('cuda'):
-            print("-----------------------Training on CUDA-------------------------")
+            # print("-----------------------Training on CUDA-------------------------")
             torch.cuda.manual_seed(SEED)
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-        if has_splits:
-            print('Split:', split)
+        # if has_splits:
+        #     print('Split:', split)
         if rewired:
-            dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
-            rewirer = Rewirer(
-                dataset[0], DATASET=dataset.name, step=rewirer_step, layers=rewirer_layers,
-                mode=rewirer_mode, split=split if has_splits else None, loss=loss, eps=eps)
-            rewirer.load()
             dataset = get_dataset(dataset_name, normalize_features,
-                                  transform=lambda d: rewirer.rewire(
-                                      d, model_indices, num_edges, max_node_degree=max_node_degree
+                                  transform=lambda d: Rewirer.rewire(
+                                    d, model_indices, num_edges, split if has_splits else None, loss=loss, eps=eps,
+                                    max_node_degree=max_node_degree, step=rewirer_step, layers=rewirer_layers
                                   ),
                                   lcc=lcc)
+
         data = dataset[0]
 
         for _ in range(runs):
-            print('Runs:', _)
-
+        #     print('Runs:', _)
             model = Model(dataset)
             model.to(device).reset_parameters()
             optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -68,20 +64,21 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
             bad_counter = 0
 
 
-            pbar = tqdm(range(0, epochs))
+            # pbar = tqdm(range(0, epochs))
+            pbar = range(0, epochs)
             for epoch in pbar:
                 train(model, optimizer, data, split=split if has_splits else None)
                 eval_info = evaluate(model, data, split=split if has_splits else None)
                 eval_info['epoch'] = epoch
-                if epoch % 2 == 0:
-                    pbar.set_description(
-                        'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
-                        'test loss: {:.2f}, test acc: {:.4f}'
-                            .format(
-                                epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
-                                eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
-                            )
-                    )
+                # if epoch % 2 == 0:
+                #     pbar.set_description(
+                #         'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
+                #         'test loss: {:.2f}, test acc: {:.4f}'
+                #             .format(
+                #                 epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
+                #                 eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
+                #             )
+                #     )
 
                 if eval_info['val_acc'] > best_val_acc:
                     eval_info_early_model = eval_info
@@ -103,26 +100,28 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
             test_accs.append(eval_info_early_model['test_acc'])
             test_macro_f1s.append(eval_info_early_model['test_macro_f1'])
             durations.append(t_end - t_start)
-        print(eval_info_early_model)
+        # print(eval_info_early_model)
 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, duration = tensor(val_losses), tensor(train_accs), tensor(val_accs), \
                                                             tensor(test_accs), tensor(test_macro_f1s), tensor(durations)
 
-    print('Val Loss: {:.4f} ± {:.3f}, Train Accuracy: {:.3f} ± {:.3f}, Val Accuracy: {:.3f} ± {:.3f}, Test Accuracy: {:.3f} ± {:.3f}, Macro-F1: {:.3f} ± {:.3f}, Duration: {:.3f}, Epoch: {}'.
-          format(val_losses.mean().item(),
-                 val_losses.std().item(),
-                 train_accs.mean().item(),
-                 train_accs.std().item(),
-                 val_accs.mean().item(),
-                 val_accs.std().item(),
-                 test_accs.mean().item(),
-                 test_accs.std().item(),
-                 test_macro_f1s.mean().item(),
-                 test_macro_f1s.std().item(),
-                 duration.mean().item(),
-                 eval_info_early_model['epoch']))
+    # print('Val Loss: {:.4f} ± {:.3f}, Train Accuracy: {:.3f} ± {:.3f}, Val Accuracy: {:.3f} ± {:.3f}, Test Accuracy: {:.3f} ± {:.3f}, Macro-F1: {:.3f} ± {:.3f}, Duration: {:.3f}, Epoch: {}'.
+    #       format(val_losses.mean().item(),
+    #              val_losses.std().item(),
+    #              train_accs.mean().item(),
+    #              train_accs.std().item(),
+    #              val_accs.mean().item(),
+    #              val_accs.std().item(),
+    #              test_accs.mean().item(),
+    #              test_accs.std().item(),
+    #              test_macro_f1s.mean().item(),
+    #              test_macro_f1s.std().item(),
+    #              duration.mean().item(),
+    #              eval_info_early_model['epoch']))
 
     # print('row_diff:', cal_row_diff(model, data, split), 'col_diff:', cal_col_diff(model, data, split))
+    print(train_accs.mean().item(), test_accs.mean().item(), val_accs.mean().item(), train_accs.std().item(),
+          test_accs.std().item(), val_accs.std().item())
     return test_accs.mean().item()
 
 
