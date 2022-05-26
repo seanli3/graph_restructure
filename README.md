@@ -19,6 +19,9 @@ torchaudio=0.11.0
 torchvision=0.12.0
 ```
 
+## Pre-processing
+Run `run_rewire.sh`, this may take some time
+
 ## Main results
 To reproduce results in Table 1, Figure 5 and Figure 6, open the relevant `run_*.sh` file, uncomment the lines you want to run and execute the script
 

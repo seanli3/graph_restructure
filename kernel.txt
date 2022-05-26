@@ -1,7 +1,0 @@
---cuda --rewired --net=GCN --dataset=ogbg-molhiv --batch_size=128
---cuda --rewired --net=GCNWithJK --dataset=ogbg-molhiv --batch_size=128
---cuda --rewired --net=GraphSAGEWithJK --dataset=ogbg-molhiv --batch_size=128
---cuda --rewired --net=GIN0WithJK --dataset=ogbg-molhiv --batch_size=128
---cuda --rewired --net=GINWithJK --dataset=ogbg-molhiv --batch_size=128
---cuda --rewired --net=GIN0 --dataset=ogbg-molhiv --batch_size=128
---cuda --rewired --net=GIN --dataset=ogbg-molhiv --batch_size=128

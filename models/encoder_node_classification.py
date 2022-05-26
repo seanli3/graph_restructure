@@ -474,6 +474,8 @@ class Rewirer(torch.nn.Module):
         ) + '.pt'
         from os.path import exists
         file_exists = exists(SAVED_DISTANCE_MATRIX)
+        print(SAVED_DISTANCE_MATRIX)
+        print(file_exists)
 
         if not file_exists:
             rewirer = Rewirer(
