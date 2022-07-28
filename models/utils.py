@@ -4,7 +4,7 @@ from itertools import product
 import numpy as np
 import torch
 from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian, remove_self_loops, to_dense_adj
+from torch_geometric.utils import get_laplacian, remove_self_loops, to_dense_adj, to_undirected
 from config import USE_CUDA, DEVICE, SEED
 from torch_scatter import scatter_add
 from torch_geometric.utils import remove_self_loops
@@ -670,3 +670,20 @@ def dot_product(a):
     # sim_mt = a_norm.matmul(b_norm.permute(0, 2, 1))
     sim_mt = a.matmul(a.permute(0, 2, 1))
     return sim_mt
+
+
+def find_optimal_edges(num_nodes, dist, mask):
+    edge_step = int(num_nodes/10)
+    best_homo = 0
+    best_edges = torch.tensor([], device=device)
+    for num_edges in range(0, int(num_nodes*num_nodes/10), edge_step):
+        triu_indices = torch.triu_indices(num_nodes, num_nodes, 1, device=device)
+        _, idx = torch.topk(dist, int(num_edges), dim=0, largest=False)
+        edges = to_undirected(triu_indices[:, idx])
+        homo = our_homophily_measure(edges, mask).item()
+        if homo >= best_homo:
+            best_homo = homo
+            best_edges = edges
+        else:
+            break
+    return best_edges

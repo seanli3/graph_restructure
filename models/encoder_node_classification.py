@@ -3,7 +3,8 @@ from numpy.random import seed as nseed
 from torch_geometric.utils import negative_sampling, to_undirected, add_self_loops, homophily
 import numpy as np
 from models.utils import our_homophily_measure, get_adj, get_random_signals, create_label_sim_matrix, \
-    get_normalized_adj, dot_product, get_distance_diff_indices, sample_positive_nodes_dict, sample_negative_nodes_dict
+    get_normalized_adj, dot_product, get_distance_diff_indices, sample_positive_nodes_dict, sample_negative_nodes_dict, \
+    find_optimal_edges
 from dataset.datasets import get_dataset
 from models.autoencoders import NodeFeatureSimilarityEncoder, SpectralSimilarityEncoder
 from tqdm import tqdm
@@ -435,10 +436,13 @@ class Rewirer(torch.nn.Module):
                 model.load_state_dict(saved_model['model'])
         elif self.mode == 'supervised':
             for model in self.models:
-                file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}'.format(
-                    self.DATASET.lower(), self.mode, model.name, self.loss, self.eps
-                ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_split_{}'\
-                    .format(self.DATASET.lower(), self.mode, model.name, self.loss, self.eps, self.split) + '.pt'
+                file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_{}_{}'.format(
+                    self.DATASET.lower(), self.mode, model.name, self.loss, self.eps, self.with_node_feature,
+                    self.with_rand_signal
+                ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + \
+                     '/{}_{}_{}_{}_{}_split_{}_{}_{}'.format(
+                         self.DATASET.lower(), self.mode, model.name, self.loss, self.eps, self.split,
+                         self.with_node_feature, self.with_rand_signal) + '.pt'
                 saved_model = torch.load(file_name, map_location=device)
                 model.load_state_dict(saved_model['model'])
 
@@ -473,17 +477,17 @@ class Rewirer(torch.nn.Module):
 
     @classmethod
     def rewire(cls, dataset, model_indices, num_edges, split, loss='triplet', eps='0.1', max_node_degree=10,
-               step=0.1, layers=[256, 128, 64]):
-        SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/dist_mat_{}_{}_{}_{}_{}_{}'.format(
-            dataset.name, split, loss, eps, step, layers
+               step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True):
+        SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/dist_mat_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+            dataset.name, split, loss, eps, step, layers, with_node_feature, with_rand_signal
         ) + '.pt'
         from os.path import exists
         file_exists = exists(SAVED_DISTANCE_MATRIX)
 
         if not file_exists:
             rewirer = Rewirer(
-                dataset[0], DATASET=dataset.name, step=step, layers=layers,
-                mode='supervised', split=split, loss=loss, eps=eps)
+                dataset[0], DATASET=dataset.name, step=step, layers=layers, mode='supervised', split=split, loss=loss,
+                eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal)
             rewirer.load()
             if loss in ['triplet', 'contrastive']:
                 dist, D = rewirer.get_dist_matrix(model_indices, max_node_degree)
@@ -494,34 +498,14 @@ class Rewirer(torch.nn.Module):
         dist, D = torch.load(SAVED_DISTANCE_MATRIX)
         if loss in ['triplet', 'contrastive']:
             _, idx = torch.topk(D, int(max_node_degree), dim=0, largest=False)
-            edges = torch.stack(
-                (idx.view(-1), torch.arange(dataset.data.num_nodes, device=device).repeat(max_node_degree)),
-                dim=0
-            )
-            A_2 = torch.zeros(dataset.data.num_nodes, dataset.data.num_nodes, device=device).bool()
-            A_2[edges[0], edges[1]] = True
-
-            triu_indices = torch.triu_indices(dataset.data.num_nodes, dataset.data.num_nodes, 1)
-            _, idx = torch.topk(dist, int(num_edges), dim=0, largest=False)
-            edges = to_undirected(triu_indices[:, idx])
-            A_1 = torch.zeros(dataset.data.num_nodes, dataset.data.num_nodes, device=device).bool()
-            A_1[edges[0], edges[1]] = True
+            val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
+            edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask)
         else:
             _, idx = torch.topk(D, int(max_node_degree), dim=0, largest=True)
-            edges = torch.stack(
-                (idx.view(-1), torch.arange(dataset.data.num_nodes, device=device).repeat(max_node_degree)), dim=0
-            )
-            A_2 = torch.zeros(dataset.data.num_nodes, dataset.data.num_nodes, device=device).bool()
-            A_2[edges[0], edges[1]] = True
+            val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
+            edges = find_optimal_edges(dataset.data.num_nodes, sim, val_mask)
 
-            _, idx = torch.topk(D.flatten(), int(num_edges))
-            edges = torch.tensor(np.array(np.unravel_index(idx.cpu().numpy(), sim.shape)), device=device).detach()
-            edges = to_undirected(edges)
-            A_1 = torch.zeros(dataset.data.num_nodes, dataset.data.num_nodes, device=device).bool()
-            A_1[edges[0], edges[1]] = True
-
-        A = A_1.logical_and_(A_2)
-        new_edge_index = A.nonzero().T
+        new_edge_index = edges
         new_dataset = deepcopy(dataset)
 
         G = nx.Graph(new_edge_index.T.tolist())
@@ -542,6 +526,7 @@ class Rewirer(torch.nn.Module):
               homophily(new_edge_index, dataset[0].y, method='edge_insensitive'),
               new_edge_index.shape[1]/dataset[0].num_nodes,
               nx.density(G),
+              sep=',',
               end=' ')
         # print("edges before: ", dataset.data.num_edges, " edges after: ", new_edge_index.shape[1])
         # print('homophily before:', our_homophily_measure(dataset[0].edge_index, dataset[0].y),

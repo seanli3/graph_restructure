@@ -31,6 +31,8 @@ parser.add_argument('--lcc', action='store_true')
 parser.add_argument('--loss', type=str, default='triplet')
 parser.add_argument('--eps', type=float, default=0.1)
 parser.add_argument('--max_node_degree', type=int, default=10)
+parser.add_argument('--with_node_feature', action='store_true')
+parser.add_argument('--with_rand_signal', action='store_true')
 args = parser.parse_args()
 
 
@@ -65,8 +67,10 @@ class Net(torch.nn.Module):
         x = self.conv2(x, edge_index, edge_weight)
         return F.log_softmax(x, dim=1), x
 
+print('edges,h_den,h_den_train,h_den_val,h_den_test,h_edge,h_node,h_norm,degree,density,train_acc,test_acc,val_acc,train_acc_std,test_acc_std,val_acc_std')
 
 run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
     run_split=args.run_split, num_edges=args.num_edges, model_indices=args.model_indices,
     rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step, lcc=args.lcc, loss=args.loss, eps=args.eps,
-    max_node_degree=args.max_node_degree)
+    max_node_degree=args.max_node_degree, with_node_feature=args.with_node_feature,
+    with_rand_signal=args.with_rand_signal)
