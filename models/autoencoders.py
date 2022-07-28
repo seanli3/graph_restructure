@@ -58,7 +58,7 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
-    def __init__(self, data, step, name, exact):
+    def __init__(self, data, step, name, exact, with_node_feature=True, with_rand_signal=True):
         super(SpectralSimilarityEncoder, self).__init__()
         self.name = name
         self.step = step
@@ -71,8 +71,15 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         else:
             self.D = create_filter(L, self.step).permute(1, 2, 0)
         self.data = data
-        random_signals = get_random_signals(data.num_nodes, data.num_features)
-        self.x = torch.cat((data.x, random_signals), dim=1)
+
+        if with_rand_signal:
+            random_signals = get_random_signals(data.num_nodes, data.num_features)
+            if with_node_feature:
+                self.x = torch.cat((data.x, random_signals), dim=1)
+            else:
+                self.x = random_signals
+        else:
+            self.x = data.x
 
         self.A = None
         self.windows = math.ceil(2/self.step)

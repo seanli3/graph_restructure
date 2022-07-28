@@ -42,7 +42,6 @@ args.cuda = args.cuda and torch.cuda.is_available()
 
 
 if args.cuda:
-    print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(args.seed)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 

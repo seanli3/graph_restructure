@@ -38,7 +38,6 @@ torch.manual_seed(args.seed)
 device = DEVICE
 
 if USE_CUDA:
-    print("-----------------------Training on CUDA-------------------------")
     torch.cuda.manual_seed(args.seed)
 
 

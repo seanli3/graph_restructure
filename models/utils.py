@@ -94,7 +94,7 @@ def our_homophily_measure(edge_index, label):
     try:
         h = H/complete_graph_edges
     except RuntimeError as e:
-        print('Missing labels')
+        # print('Missing labels')
         return torch.tensor(0)
     h_homo = h.diag()
     h_hete = (h.triu(1) + h.tril(-1)).mean(1)

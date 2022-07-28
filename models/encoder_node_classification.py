@@ -22,13 +22,15 @@ device = DEVICE
 
 class Rewirer(torch.nn.Module):
     def __init__(self, data, DATASET, step=0.2, layers=[128, 64], mode="supervised", split=None, exact=False,
-                 loss="triplet", eps=0.1, dry_run=False):
+                 loss="triplet", eps=0.1, dry_run=False, with_rand_signal=True, with_node_feature=True):
         super(Rewirer, self).__init__()
         self.data = data
         self.DATASET = DATASET
         self.loss = loss
         self.eps = eps
         self.dry_run = dry_run
+        self.with_node_feature = with_node_feature
+        self.with_rand_signal = with_rand_signal
 
         if mode == 'unsupervised':
             self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
@@ -37,7 +39,8 @@ class Rewirer(torch.nn.Module):
             self.models = [self.fea_sim_model, self.struct_sim_model]
         else:
             # self.fea_sim_model = NodeFeatureSimilarityEncoder(data, layers=layers, name='fea')
-            self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, name='struct', exact=exact)
+            self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, name='struct', exact=exact,
+              with_node_feature=with_node_feature, with_rand_signal=with_rand_signal)
             # self.conv_sim_model = SpectralSimilarityEncoder(data, data.x, step=step, name="conv")
             self.models = [self.struct_sim_model]
 
@@ -88,10 +91,12 @@ class Rewirer(torch.nn.Module):
                 model.parameters(), lr=lr, weight_decay=weight_decay
             ) if len(list(model.parameters())) > 0 else None
 
-            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}'.format(
-                self.DATASET.lower(), self.mode, model.name, self.loss, self.eps
-            ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_split_{}'.format(
-                self.DATASET.lower(), self.mode, model.name, self.loss, self.eps, self.split
+            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_{}_{}'.format(
+                self.DATASET.lower(), self.mode, model.name, self.loss,
+                self.eps, self.with_node_feature,self.with_rand_signal
+            ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_split_{}_{}_{}'.format(
+                self.DATASET.lower(), self.mode, model.name, self.loss,
+                self.eps, self.split, self.with_node_feature, self.with_rand_signal
             ) + '.pt'
 
             # batch_size = data.num_nodes
@@ -474,8 +479,6 @@ class Rewirer(torch.nn.Module):
         ) + '.pt'
         from os.path import exists
         file_exists = exists(SAVED_DISTANCE_MATRIX)
-        print(SAVED_DISTANCE_MATRIX)
-        print(file_exists)
 
         if not file_exists:
             rewirer = Rewirer(
@@ -620,6 +623,8 @@ if __name__ == "__main__":
     parser.add_argument('--eps', type=float, default=0.1)
     parser.add_argument('--dry_run', action='store_true')
     parser.add_argument('--sample_size', type=int, default=5)
+    parser.add_argument('--with_node_feature', action='store_true')
+    parser.add_argument('--with_rand_signal', action='store_true')
     args = parser.parse_args()
 
     if args.loss not in ['triplet', 'contrastive', 'npair', 'mse']:
@@ -638,7 +643,6 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
 
     if torch.cuda.is_available() and USE_CUDA:
-        print("-----------------------Training on CUDA-------------------------")
         torch.cuda.manual_seed(seed)
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
@@ -646,5 +650,6 @@ if __name__ == "__main__":
     data = dataset[0]
 
     module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split,
-                     exact=args.exact, loss=args.loss, eps=args.eps, dry_run=args.dry_run)
+                     exact=args.exact, loss=args.loss, eps=args.eps, dry_run=args.dry_run,
+                     with_node_feature=args.with_node_feature, with_rand_signal=args.with_rand_signal)
     module.train(epochs=10000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step, sample_size=args.sample_size)
