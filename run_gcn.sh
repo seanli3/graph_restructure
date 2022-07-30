@@ -1,4 +1,4 @@
-echo 'edges h_den h_den_train h_den_val h_den_test h_edge h_node h_norm degree density train_acc test_acc val_acc train_acc_std test_acc_std val_acc_std'
+print('edges,h_den,h_den_train,h_den_val,h_den_test,h_edge,h_node,h_norm,degree,density,train_acc,test_acc,val_acc,train_acc_std,test_acc_std,val_acc_std')
 
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.1 --model_indices 0 --hidden=32 --run_split=0 --num_edges=252
 #CUDA_DEVICE=1 python -m benchmark.node_classification.gcn --dataset=Wisconsin --rewired --rewirer_step=0.1 --dropout=0.6 --model_indices 0 --hidden=32 --run_split=1 --num_edges=1005
