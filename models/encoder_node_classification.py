@@ -528,15 +528,6 @@ class Rewirer(torch.nn.Module):
               nx.density(G),
               sep=',',
               end=' ')
-        # print("edges before: ", dataset.data.num_edges, " edges after: ", new_edge_index.shape[1])
-        # print('homophily before:', our_homophily_measure(dataset[0].edge_index, dataset[0].y),
-        #       'homophily after:', our_homophily_measure(new_edge_index, dataset[0].y))
-        new_edges_set = set([tuple(i) for i in new_edge_index.T.tolist()])
-        old_edges_set = set([tuple(i) for i in dataset[0].edge_index.T.tolist()])
-        # edges_added = len(new_edges_set.difference(old_edges_set))
-        # edges_removed = len(old_edges_set.difference(new_edges_set))
-        # edges_preserved = len(old_edges_set.intersection(new_edges_set))
-        # print('Edges added: {}, edges removed: {}, edges preserved: {}'.format(edges_added, edges_removed, edges_preserved))
 
         new_dataset.data.edge_index = new_edge_index
         return new_dataset
