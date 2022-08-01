@@ -672,8 +672,11 @@ def dot_product(a):
     return sim_mt
 
 
-def find_optimal_edges(num_nodes, dist, mask):
-    edge_step = int(num_nodes/10)
+def find_optimal_edges(num_nodes, dist, mask, step=None):
+    if step:
+        edge_step = step
+    else:
+        edge_step = int(num_nodes/10)
     best_homo = 0
     best_edges = torch.tensor([], device=device)
     for num_edges in range(0, int(num_nodes*num_nodes/10), edge_step):

@@ -16,7 +16,8 @@ device = DEVICE
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, run_split=None,
         rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1],
-        lcc=False, loss='triplet', eps='0.1', max_node_degree=5, with_node_feature=True, with_rand_signal=True):
+        lcc=False, loss='triplet', eps='0.1', max_node_degree=5, with_node_feature=True, with_rand_signal=True,
+        edge_step=None):
 
     dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
     if len(dataset.data.train_mask.shape) > 1:
@@ -46,7 +47,8 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                                   transform=lambda d: Rewirer.rewire(
                                       d, model_indices, num_edges, split if has_splits else None, loss=loss, eps=eps,
                                       max_node_degree=max_node_degree, step=rewirer_step, layers=rewirer_layers,
-                                      with_node_feature=with_node_feature, with_rand_signal=with_rand_signal
+                                      with_node_feature=with_node_feature, with_rand_signal=with_rand_signal,
+                                      edge_step=edge_step
                                   ),
                                   lcc=lcc)
 

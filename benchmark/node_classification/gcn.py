@@ -5,10 +5,7 @@ from torch_geometric.nn import GCNConv
 from config import USE_CUDA, DEVICE
 from random import seed as rseed
 from numpy.random import seed as nseed
-from pathlib import Path
 from benchmark.node_classification.train_eval import run
-
-path = Path(__file__).parent
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, required=True)
@@ -33,6 +30,7 @@ parser.add_argument('--eps', type=float, default=0.1)
 parser.add_argument('--max_node_degree', type=int, default=10)
 parser.add_argument('--with_node_feature', action='store_true')
 parser.add_argument('--with_rand_signal', action='store_true')
+parser.add_argument('--edge_step', type=int, default=None)
 args = parser.parse_args()
 
 
@@ -71,4 +69,4 @@ run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weigh
     run_split=args.run_split, num_edges=args.num_edges, model_indices=args.model_indices,
     rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step, lcc=args.lcc, loss=args.loss, eps=args.eps,
     max_node_degree=args.max_node_degree, with_node_feature=args.with_node_feature,
-    with_rand_signal=args.with_rand_signal)
+    with_rand_signal=args.with_rand_signal, edge_step=args.edge_step)

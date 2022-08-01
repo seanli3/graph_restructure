@@ -163,7 +163,7 @@ class Rewirer(torch.nn.Module):
 
     @classmethod
     def rewire(cls, dataset, model_indices, num_edges, split, loss='triplet', eps='0.1', max_node_degree=10,
-               step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True):
+               step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True, edge_step=None):
         SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_dist_mat_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             dataset.name, split, loss, eps, step, layers, with_node_feature, with_rand_signal
         ) + '.pt'
@@ -185,7 +185,7 @@ class Rewirer(torch.nn.Module):
 
         _, idx = torch.topk(D, int(max_node_degree), dim=0, largest=False)
         val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
-        edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask)
+        edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask, step=edge_step)
 
         new_edge_index = edges
         new_dataset = deepcopy(dataset)
