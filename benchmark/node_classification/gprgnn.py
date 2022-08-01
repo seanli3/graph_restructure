@@ -43,6 +43,7 @@ parser.add_argument('--eps', type=float, default=0.1)
 parser.add_argument('--max_node_degree', type=int, default=10)
 parser.add_argument('--with_node_feature', action='store_true')
 parser.add_argument('--with_rand_signal', action='store_true')
+parser.add_argument('--edge_step', type=int, default=None)
 args = parser.parse_args()
 
 

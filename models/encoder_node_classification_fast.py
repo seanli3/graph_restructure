@@ -98,9 +98,10 @@ class Rewirer(torch.nn.Module):
                     train_losses.append(train_loss.item())
 
                 # # Validation
-                for batch in val_batches:
-                    val_loss = self.val_batch(val_dist_diff_indices[batch_num], model, val_idx[batch])
-                    val_losses.append(val_loss.item())
+                for batch_num, batch in enumerate(val_batches):
+                    if len(val_dist_diff_indices[batch_num]) > 0:
+                        val_loss = self.val_batch(val_dist_diff_indices[batch_num], model, val_idx[batch])
+                        val_losses.append(val_loss.item())
 
                 # Compute loss
                 train_loss_mean = torch.tensor(train_losses).mean().item()
@@ -161,6 +162,19 @@ class Rewirer(torch.nn.Module):
             saved_model = torch.load(file_name, map_location=device)
             model.load_state_dict(saved_model['model'])
 
+
+    def get_dist_matrix(self, model_indices, max_node_degree):
+        triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, 1)
+        dist = torch.zeros(triu_indices.shape[1], device=device)
+        for model in map(self.models.__getitem__, model_indices):
+            model.to(device)
+            dist += model.dist()
+        D = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+        D[triu_indices[0], triu_indices[1]] = dist
+        D = D + D.T
+        D.fill_diagonal_(9e15)
+        return dist, D
+
     @classmethod
     def rewire(cls, dataset, model_indices, num_edges, split, loss='triplet', eps='0.1', max_node_degree=10,
                step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True, edge_step=None):
@@ -175,10 +189,7 @@ class Rewirer(torch.nn.Module):
                 dataset[0], DATASET=dataset.name, step=step, layers=layers, mode='supervised', split=split, loss=loss,
                 eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal)
             rewirer.load()
-            if loss in ['triplet', 'contrastive']:
-                dist, D = rewirer.get_dist_matrix(model_indices, max_node_degree)
-            else:
-                dist, D = rewirer.get_sim_matrix(model_indices, max_node_degree)
+            dist, D = rewirer.get_dist_matrix(model_indices, max_node_degree)
             torch.save([dist, D], SAVED_DISTANCE_MATRIX)
 
         dist, D = torch.load(SAVED_DISTANCE_MATRIX)
@@ -209,7 +220,7 @@ class Rewirer(torch.nn.Module):
               new_edge_index.shape[1] / dataset[0].num_nodes,
               nx.density(G),
               sep=',',
-              end=' ')
+              end=',')
 
         new_dataset.data.edge_index = new_edge_index
         return new_dataset

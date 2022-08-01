@@ -53,13 +53,13 @@ CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Squirrel --
 CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Squirrel --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=8 --with_rand_signal --with_node_feature
 CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Squirrel --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=9 --with_rand_signal --with_node_feature
 
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=0 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=1 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=2 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=3 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=4 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=5 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=6 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=7 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=8 --with_rand_signal --with_node_feature
-CUDA_DEVICE=1 python -m models.encoder_node_classification --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=64 --eps=0.1 --split=9 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=0 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=1 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=2 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=3 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=4 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=5 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=6 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=7 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=8 --with_rand_signal --with_node_feature
+CUDA_DEVICE=1 python -m models.encoder_node_classification_fast --dataset=Actor --lr=0.01 --step=0.1 --mode=supervised --sample_size=10 --eps=0.1 --split=9 --with_rand_signal --with_node_feature

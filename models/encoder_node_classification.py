@@ -527,7 +527,7 @@ class Rewirer(torch.nn.Module):
               new_edge_index.shape[1]/dataset[0].num_nodes,
               nx.density(G),
               sep=',',
-              end=' ')
+              end=',')
 
         new_dataset.data.edge_index = new_edge_index
         return new_dataset
