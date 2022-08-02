@@ -9,6 +9,8 @@ from config import USE_CUDA, DEVICE, SEED
 from torch_scatter import scatter_add
 from torch_geometric.utils import remove_self_loops
 from config import DEVICE
+from torch_sparse import spspmm
+
 
 device = DEVICE
 
@@ -359,7 +361,35 @@ def neumann_inv(m, k):
     return ret
 
 
-# This new rational approximator does not show any advatanges so far
+def neumann_inv_sparse(m, I, k):
+    ret = I
+    size = I.shape[0]
+    ret = ret.coalesce()
+    ret_index = ret.indices()
+    ret_values = ret.values()
+    I_m = (I - m).coalesce()
+    for l in range(k):
+        I_m_pow_index = I_m.indices()
+        I_m_pow_values = I_m.values()
+        for _ in range(1, int(math.pow(2,l))):
+            I_m_pow_index, I_m_pow_values = spspmm(I_m_pow_index, I_m_pow_values, I_m_pow_index, I_m_pow_values, size, size, size)
+            # I_m_pow_values = I_m_pow_values.clamp(max=1, min=-1)
+            # I_m_pow_index = I_m_pow_index[:, I_m_pow_values.abs() > 0.001]
+            # I_m_pow_values = I_m_pow_values[I_m_pow_values.abs() > 0.001]
+        I_m_pow = torch.sparse_coo_tensor(I_m_pow_index, I_m_pow_values, device=device, size=(size, size))
+        IIm = (I + I_m_pow).coalesce()
+        IIm_index = IIm.indices()
+        IIm_values = IIm.values()
+        IIm_index = IIm_index[:, IIm_values.abs() > 1e-7]
+        IIm_values = IIm_values[IIm_values.abs() > 1e-7]
+        ret_index, ret_values = spspmm(ret_index, ret_values, IIm_index, IIm_values, size, size, size)
+        # ret_index = ret_index[:, ret_values.abs() > 0.001]
+        # ret_values = ret_values[ret_values.abs() > 0.001]
+        if ret_values.isnan().any() or ret_values.isinf().any():
+            raise RuntimeError('NaN or Inf in Neumann approximation, try reduce order')
+    return ret_index, ret_values
+
+
 def create_filter(laplacian, step, order=3, neumann_order=10):
     num_nodes = laplacian.shape[0]
     a = torch.arange(-step/2, 2-step/2, step, device=device).view(-1, 1, 1)
@@ -376,6 +406,40 @@ def create_filter(laplacian, step, order=3, neumann_order=10):
     else:
         ret = 1/s.pow(m)*(((laplacian - a)/(2+e)).pow(m) + 1/s.pow(m)).pow(-1)
     return ret.float()
+
+def create_filter_sparse(laplacian, step, order=3, neumann_order=4):
+    num_nodes = laplacian.shape[0]
+    a = torch.arange(0, 2, step).tolist()
+    s = 4/step
+    m = order*2
+    e = 2*math.pow(s, 2*m)/(math.pow(s, 2*m)-1)-2 + 1e-6
+
+    I_index = torch.tensor([range(num_nodes), range(num_nodes)])
+    I_values = torch.ones(num_nodes)
+    I = torch.sparse_coo_tensor(I_index, I_values, device=device, size=(num_nodes, num_nodes))
+    ret = []
+    for ai in a:
+        B = ((laplacian - ai * I) / (2 + e))
+        B = B.coalesce()
+        # B_index = B.indices()
+        # B_values = B.values()
+        B_index = B.indices()[:, B.values().abs() > 1e-3]
+        B_values = B.values()[B.values().abs() > 1e-3]
+        for _ in range(1, m):
+            B_index, B_values = spspmm(B_index, B_values, B_index, B_values, num_nodes, num_nodes, num_nodes, coalesced=True)
+            B_index = B_index[:, B_values.abs() > 1e-3]
+            B_values = B_values[B_values.abs() > 1e-3]
+        B = torch.sparse_coo_tensor(B_index, B_values, device=device, size=(num_nodes, num_nodes))
+        B = B + I / math.pow(s, m)
+        ret_index, ret_values = neumann_inv_sparse(B, I, neumann_order)
+        Ism = (I/math.pow(s, m)).coalesce()
+        Ism_index = Ism.indices()
+        Ism_values = Ism.values()
+        ret_index, ret_values = spspmm(Ism_index, Ism_values, ret_index, ret_values, num_nodes, num_nodes, num_nodes)
+        # ret_index = ret_index[:, ret_values.abs() > 0.001]
+        # ret_values = ret_values[ret_values.abs() > 0.0001]
+        ret.append(torch.sparse_coo_tensor(ret_index, ret_values, device=device, size=(num_nodes, num_nodes)))
+    return ret
 
 def create_filter_old(laplacian, step, order=2):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))
@@ -567,7 +631,7 @@ def rewire_graph(model, dataset, keep_num_edges=False, threshold=None):
         L_index, L_weight = get_laplacian(dataset[i].edge_index, normalization='sym')
         L = torch.zeros(dataset[i].num_nodes, dataset[i].num_nodes, device=L_index.device)
         L = L.index_put((L_index[0], L_index[1]), L_weight).to(device)
-        D = create_filter(L, step).permute(1, 2, 0)
+        D = create_filter_sparse(L, step).permute(1, 2, 0)
         dictionary[i] = D
 
     C = torch.nn.functional.normalize(C, dim=0, p=2)
@@ -646,6 +710,17 @@ def get_distance_diff_indices(community, num_samples=5):
             intra_class = np.random.choice(intra_class, num_samples)
             inter_class = np.random.choice(inter_class, num_samples)
             indices += product(product([i], intra_class), product([i], inter_class))
+    return torch.tensor(indices)
+
+def get_distance_diff_indices_sparse(index, y, num_samples=5):
+    indices = []
+    for id, i in enumerate(index.tolist()):
+        intra_class = (y[index] == y[i]).nonzero().view(-1).cpu()
+        inter_class = (y[index] != y[i]).nonzero().view(-1).cpu()
+        if len(inter_class) > 0 and len(intra_class) > 0:
+            intra_class = np.random.choice(intra_class, num_samples)
+            inter_class = np.random.choice(inter_class, num_samples)
+            indices += product(product([id], intra_class), product([id], inter_class))
     return torch.tensor(indices)
 
 

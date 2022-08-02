@@ -2,7 +2,7 @@ import torch
 from numpy.random import seed as nseed
 import numpy as np
 from torch_geometric.utils import homophily
-from models.utils import create_label_sim_matrix, get_distance_diff_indices, find_optimal_edges, our_homophily_measure
+from models.utils import create_label_sim_matrix, get_distance_diff_indices, find_optimal_edges, our_homophily_measure, get_distance_diff_indices_sparse
 from dataset.datasets import get_dataset
 from models.autoencoders import SpectralSimilarityEncoder
 from tqdm import tqdm
@@ -29,7 +29,7 @@ class Rewirer(torch.nn.Module):
 
         self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, name='struct', exact=exact,
                                                           with_node_feature=with_node_feature,
-                                                          with_rand_signal=with_rand_signal)
+                                                          with_rand_signal=with_rand_signal, sparse=True)
         self.models = [self.struct_sim_model]
 
         self.mode = mode
@@ -42,7 +42,6 @@ class Rewirer(torch.nn.Module):
 
     def train_supervised(self, epochs, lr, weight_decay, patience, step, train_mask, val_mask, sample_size):
         data = self.data
-        community = create_label_sim_matrix(data)
         train_idx = train_mask.nonzero().view(-1)
         val_idx = val_mask.nonzero().view(-1)
 
@@ -68,21 +67,23 @@ class Rewirer(torch.nn.Module):
             ) + '.pt'
 
             # batch_size = data.num_nodes
-            batch_size = 128
+            batch_size = 1024
             train_batches = list(gen_batches(train_idx.shape[0], batch_size, min_batch_size=1))
             val_batches = list(gen_batches(val_idx.shape[0], batch_size, min_batch_size=1))
 
             train_dist_diff_indices = []
             val_dist_diff_indices = []
+            y = data.y.view(-1)
             for batch in train_batches:
                 train_dist_diff_indices.append(
-                    get_distance_diff_indices(
-                        community[train_idx[batch], :][:, train_idx[batch]], num_samples=sample_size
+                    get_distance_diff_indices_sparse(
+                        train_idx[batch], y, num_samples=sample_size
                     )
                 )
+            for batch in val_batches:
                 val_dist_diff_indices.append(
-                    get_distance_diff_indices(
-                        community[val_idx[batch], :][:, val_idx[batch]], num_samples=sample_size
+                    get_distance_diff_indices_sparse(
+                        val_idx[batch], y, num_samples=sample_size
                     )
                 )
 

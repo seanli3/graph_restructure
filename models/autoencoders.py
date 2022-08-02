@@ -3,7 +3,7 @@ from torch_geometric.utils import get_laplacian
 import torch
 from torch import nn
 import torch.nn.functional as F
-from .utils import create_filter, dot_product
+from .utils import create_filter, dot_product, create_filter_sparse
 from config import DEVICE
 import itertools
 from models.utils import get_random_signals
@@ -58,18 +58,24 @@ class NodeFeatureSimilarityEncoder(torch.nn.Module):
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
-    def __init__(self, data, step, name, exact, with_node_feature=True, with_rand_signal=True):
+    def __init__(self, data, step, name, exact, with_node_feature=True, with_rand_signal=True, sparse=False):
         super(SpectralSimilarityEncoder, self).__init__()
         self.name = name
         self.step = step
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
-        L = torch.sparse_coo_tensor(L_index, L_weight, device=device, size=(data.num_nodes, data.num_nodes)).to_dense()
+        L = torch.sparse_coo_tensor(L_index, L_weight, device=device, size=(data.num_nodes, data.num_nodes))
+        if not sparse:
+            L = L.to_dense()
         self.exact = exact
+        self.sparse = sparse
 
         if exact:
             e, self.D = torch.linalg.eigh(L)
         else:
-            self.D = create_filter(L, self.step).permute(1, 2, 0)
+            if sparse:
+                self.D = create_filter_sparse(L, self.step)
+            else:
+                self.D = create_filter(L, self.step).permute(1, 2, 0)
         self.data = data
 
         if with_rand_signal:
@@ -112,26 +118,19 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         return torch.nn.functional.pdist(self(batch), p=2)
 
     def forward(self, batch, input_weights=None):
-        if input_weights is not None:
-            if batch is not None:
-                x_D = self.D.mul(input_weights)[batch, :, :][:, batch, :]
-                x = self.x[batch]
-            else:
-                x_D = self.D.mul(input_weights)
-                x = self.x
+        x = self.x[batch]
+        if self.sparse:
+            batch_D = []
+            for D in self.D:
+                batch_D.append(D.index_select(0, batch).index_select(1, batch).to_dense())
+            batch_D = torch.stack(batch_D, 0).permute(1,2,0)
+            L_hat = self.layers(batch_D).squeeze()
         else:
-            if batch is not None:
-                x_D = self.D[batch, :, :][:, batch, :]
-                x = self.x[batch]
-            else:
-                x_D = self.D
-                x = self.x
+            x_D = self.D[batch, :, :][:, batch, :]
+            x = self.x[batch]
+            L_hat = self.layers(x_D).squeeze()
 
-        L_hat = self.layers(x_D).squeeze()
-        if self.exact:
-            x_hat = L_hat
-        else:
-            x_hat = L_hat.matmul(x)
+        x_hat = L_hat.matmul(x)
         return x_hat
 
     def reset_parameters(self):
