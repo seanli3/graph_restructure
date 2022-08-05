@@ -68,7 +68,7 @@ class Rewirer(torch.nn.Module):
             ) + '.pt'
 
             # batch_size = data.num_nodes
-            batch_size =256
+            batch_size = 1024
             train_batches = list(gen_batches(train_idx.shape[0], batch_size, min_batch_size=1))
             val_batches = list(gen_batches(val_idx.shape[0], batch_size, min_batch_size=1))
 
@@ -84,18 +84,14 @@ class Rewirer(torch.nn.Module):
                         train_idx[batch], y, num_samples=sample_size
                     )
                 )
-                train_D_batch.append(
-                    model.D.index_select(0, train_idx[batch]).index_select(1, train_idx[batch])
-                )
+                train_D_batch.append(model.D.index_select(0, train_idx[batch]))
             for batch in val_batches:
                 val_dist_diff_indices.append(
                     get_distance_diff_indices_sparse(
                         val_idx[batch], y, num_samples=sample_size
                     )
                 )
-                val_D_batch.append(
-                    model.D.index_select(0, val_idx[batch]).index_select(1, val_idx[batch])
-                )
+                val_D_batch.append(model.D.index_select(0, val_idx[batch]))
 
             for epoch in pbar:
                 train_losses = []
@@ -146,7 +142,7 @@ class Rewirer(torch.nn.Module):
 
     def val_batch(self, val_dist_diff_indices, model, val_idx, D_batch):
         model.eval()
-        x_hat = model.dist(val_idx, D_batch)
+        x_hat = model.dist(D_batch)
         val_loss = model.dist_triplet_loss(x_hat, val_dist_diff_indices, val_idx.shape[0], self.eps)
         return val_loss
 
@@ -154,7 +150,7 @@ class Rewirer(torch.nn.Module):
         model.train()
         optimizer.zero_grad()
         cur = time.time()
-        x_hat = model.dist(train_idx, D_batch)
+        x_hat = model.dist(D_batch)
         print('forward time:', time.time() - cur)
         cur = time.time()
         train_loss = model.dist_triplet_loss(x_hat, train_dist_diff_indices, train_idx.shape[0], self.eps)

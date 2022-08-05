@@ -423,12 +423,12 @@ def create_filter_sparse(laplacian, step, order=3, neumann_order=4):
         B = B.coalesce()
         # B_index = B.indices()
         # B_values = B.values()
-        B_index = B.indices()[:, B.values().abs() > 1e-3]
-        B_values = B.values()[B.values().abs() > 1e-3]
+        B_index = B.indices()[:, B.values().abs() > 5e-4]
+        B_values = B.values()[B.values().abs() > 5e-4]
         for _ in range(1, m):
             B_index, B_values = spspmm(B_index, B_values, B_index, B_values, num_nodes, num_nodes, num_nodes, coalesced=True)
-            B_index = B_index[:, B_values.abs() > 1e-3]
-            B_values = B_values[B_values.abs() > 1e-3]
+            B_index = B_index[:, B_values.abs() > 5e-4]
+            B_values = B_values[B_values.abs() > 5e-4]
         B = torch.sparse_coo_tensor(B_index, B_values, device=device, size=(num_nodes, num_nodes))
         B = B + I / math.pow(s, m)
         ret_index, ret_values = neumann_inv_sparse(B, I, neumann_order)
@@ -439,7 +439,7 @@ def create_filter_sparse(laplacian, step, order=3, neumann_order=4):
         # ret_index = ret_index[:, ret_values.abs() > 0.001]
         # ret_values = ret_values[ret_values.abs() > 0.0001]
         ret.append(torch.sparse_coo_tensor(ret_index, ret_values, device=device, size=(num_nodes, num_nodes)))
-    return torch.stack(ret, 2)
+    return ret
 
 def create_filter_old(laplacian, step, order=2):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))
