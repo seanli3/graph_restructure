@@ -439,7 +439,7 @@ def create_filter_sparse(laplacian, step, order=3, neumann_order=4):
         # ret_index = ret_index[:, ret_values.abs() > 0.001]
         # ret_values = ret_values[ret_values.abs() > 0.0001]
         ret.append(torch.sparse_coo_tensor(ret_index, ret_values, device=device, size=(num_nodes, num_nodes)))
-    return ret
+    return torch.stack(ret, 2)
 
 def create_filter_old(laplacian, step, order=2):
     part1 = torch.diag(torch.ones(laplacian.shape[0], device=device) * math.pow(2, 1 / step - 1))

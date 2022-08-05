@@ -1,6 +1,7 @@
 import math
 from torch_geometric.utils import get_laplacian
 import torch
+import time
 from torch import nn
 import torch.nn.functional as F
 from .utils import create_filter, dot_product, create_filter_sparse
@@ -114,16 +115,15 @@ class SpectralSimilarityEncoder(torch.nn.Module):
     def sim(self, batch):
         return dot_product(self(batch))
 
-    def dist(self,batch=None):
-        return torch.nn.functional.pdist(self(batch), p=2)
+    def dist(self, batch, D_batch):
+        emb = self(batch, D_batch)
+        d = torch.nn.functional.pdist(emb, p=2)
+        return d
 
-    def forward(self, batch, input_weights=None):
+    def forward(self, batch, D_batch):
         x = self.x[batch]
         if self.sparse:
-            batch_D = []
-            for D in self.D:
-                batch_D.append(D.index_select(0, batch).index_select(1, batch).to_dense())
-            batch_D = torch.stack(batch_D, 0).permute(1,2,0)
+            batch_D = D_batch.to_dense()
             L_hat = self.layers(batch_D).squeeze()
         else:
             x_D = self.D[batch, :, :][:, batch, :]
