@@ -10,8 +10,6 @@ import argparse
 from config import SAVED_MODEL_DIR_NODE_CLASSIFICATION, USE_CUDA, DEVICE
 from copy import deepcopy
 from sklearn.utils import gen_batches
-import networkx as nx
-import time
 
 device = DEVICE
 
@@ -149,15 +147,9 @@ class Rewirer(torch.nn.Module):
     def train_batch(self, train_dist_diff_indices, model, optimizer, train_idx, D_batch):
         model.train()
         optimizer.zero_grad()
-        cur = time.time()
         x_hat = model.dist(D_batch)
-        print('forward time:', time.time() - cur)
-        cur = time.time()
         train_loss = model.dist_triplet_loss(x_hat, train_dist_diff_indices, train_idx.shape[0], self.eps)
-        print('loss time:', time.time() - cur)
-        cur = time.time()
         train_loss.backward()
-        print('backward time:', time.time() - cur)
         optimizer.step()
         return train_loss
 
@@ -175,20 +167,24 @@ class Rewirer(torch.nn.Module):
             model.load_state_dict(saved_model['model'])
 
 
-    def get_dist_matrix(self, model_indices, max_node_degree):
-        triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, 1)
-        dist = torch.zeros(triu_indices.shape[1], device=device)
-        for model in map(self.models.__getitem__, model_indices):
-            model.to(device)
-            dist += model.dist()
-        D = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
-        D[triu_indices[0], triu_indices[1]] = dist
-        D = D + D.T
-        D.fill_diagonal_(9e15)
-        return dist, D
+    def get_dist_matrix(self, max_node_degree):
+        with torch.no_grad():
+            emb = self.models[0](self.models[0].D)
+        dist = []
+        for i in range(self.data.num_nodes):
+            d = torch.cdist(emb[i].view(1, -1), emb)
+            d_topk = torch.topk(d, max_node_degree, largest=False)
+            d_vec = torch.sparse_coo_tensor(
+                (torch.zeros(max_node_degree).tolist(), d_topk.indices.view(-1).tolist()),
+                d_topk.values.view(-1),
+                device=device, size=(1, self.data.num_nodes)
+            )
+            dist.append(d_vec)
+        dist = torch.cat(dist, 0)
+        return dist
 
     @classmethod
-    def rewire(cls, dataset, model_indices, num_edges, split, loss='triplet', eps='0.1', max_node_degree=10,
+    def rewire(cls, dataset, model_indices, num_edges, split, loss='triplet', eps='0.1', max_node_degree=100,
                step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True, edge_step=None):
         SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_dist_mat_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             dataset.name, split, loss, eps, step, layers, with_node_feature, with_rand_signal
@@ -201,20 +197,17 @@ class Rewirer(torch.nn.Module):
                 dataset[0], DATASET=dataset.name, step=step, layers=layers, mode='supervised', split=split, loss=loss,
                 eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal)
             rewirer.load()
-            dist, D = rewirer.get_dist_matrix(model_indices, max_node_degree)
-            torch.save([dist, D], SAVED_DISTANCE_MATRIX)
+            dist = rewirer.get_dist_matrix(max_node_degree)
+            torch.save(dist, SAVED_DISTANCE_MATRIX)
 
-        dist, D = torch.load(SAVED_DISTANCE_MATRIX)
+        dist = torch.load(SAVED_DISTANCE_MATRIX).coalesce()
 
-        _, idx = torch.topk(D, int(max_node_degree), dim=0, largest=False)
         val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
         edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask, step=edge_step)
 
         new_edge_index = edges
         new_dataset = deepcopy(dataset)
 
-        G = nx.Graph(new_edge_index.T.tolist())
-        G = G.to_undirected()
         print(new_edge_index.shape[1],
               our_homophily_measure(new_edge_index, dataset[0].y).item(),
               our_homophily_measure(
@@ -230,7 +223,6 @@ class Rewirer(torch.nn.Module):
               homophily(new_edge_index, dataset[0].y, method='node'),
               homophily(new_edge_index, dataset[0].y, method='edge_insensitive'),
               new_edge_index.shape[1] / dataset[0].num_nodes,
-              nx.density(G),
               sep=',',
               end=',')
 

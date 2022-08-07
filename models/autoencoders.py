@@ -42,7 +42,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         self.D = []
         for Di in D:
             D_x = Di.mm(x)
-            D_x = D_x.where(D_x.abs() > 1e-8, torch.tensor(0., device=device))
+            D_x = D_x.where(D_x.abs() > 1e-14, torch.tensor(0., device=device))
             self.D.append(D_x.to_sparse_coo())
 
         del D

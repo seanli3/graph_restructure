@@ -4,8 +4,8 @@ from itertools import product
 import numpy as np
 import torch
 from numpy.random import seed as nseed
-from torch_geometric.utils import get_laplacian, remove_self_loops, to_dense_adj, to_undirected
-from config import USE_CUDA, DEVICE, SEED
+from torch_geometric.utils import get_laplacian, to_dense_adj, to_undirected, add_self_loops
+from config import SEED
 from torch_scatter import scatter_add
 from torch_geometric.utils import remove_self_loops
 from config import DEVICE
@@ -380,8 +380,8 @@ def neumann_inv_sparse(m, I, k):
         IIm = (I + I_m_pow).coalesce()
         IIm_index = IIm.indices()
         IIm_values = IIm.values()
-        IIm_index = IIm_index[:, IIm_values.abs() > 1e-7]
-        IIm_values = IIm_values[IIm_values.abs() > 1e-7]
+        IIm_index = IIm_index[:, IIm_values.abs() > 1e-14]
+        IIm_values = IIm_values[IIm_values.abs() > 1e-14]
         ret_index, ret_values = spspmm(ret_index, ret_values, IIm_index, IIm_values, size, size, size)
         # ret_index = ret_index[:, ret_values.abs() > 0.001]
         # ret_values = ret_values[ret_values.abs() > 0.001]
@@ -423,12 +423,12 @@ def create_filter_sparse(laplacian, step, order=3, neumann_order=4):
         B = B.coalesce()
         # B_index = B.indices()
         # B_values = B.values()
-        B_index = B.indices()[:, B.values().abs() > 5e-4]
-        B_values = B.values()[B.values().abs() > 5e-4]
+        B_index = B.indices()[:, B.values().abs() > 1e-14]
+        B_values = B.values()[B.values().abs() > 1e-14]
         for _ in range(1, m):
             B_index, B_values = spspmm(B_index, B_values, B_index, B_values, num_nodes, num_nodes, num_nodes, coalesced=True)
-            B_index = B_index[:, B_values.abs() > 5e-4]
-            B_values = B_values[B_values.abs() > 5e-4]
+            B_index = B_index[:, B_values.abs() > 1e-14]
+            B_values = B_values[B_values.abs() > 1e-14]
         B = torch.sparse_coo_tensor(B_index, B_values, device=device, size=(num_nodes, num_nodes))
         B = B + I / math.pow(s, m)
         ret_index, ret_values = neumann_inv_sparse(B, I, neumann_order)
@@ -754,10 +754,11 @@ def find_optimal_edges(num_nodes, dist, mask, step=None):
         edge_step = int(num_nodes/10)
     best_homo = 0
     best_edges = torch.tensor([], device=device)
-    for num_edges in range(0, int(num_nodes*num_nodes/10), edge_step):
-        triu_indices = torch.triu_indices(num_nodes, num_nodes, 1, device=device)
-        _, idx = torch.topk(dist, int(num_edges), dim=0, largest=False)
-        edges = to_undirected(triu_indices[:, idx])
+    for num_edges in range(edge_step, min(int(num_nodes*num_nodes/2), dist.values().shape[0] ), edge_step):
+        _, idx = torch.topk(dist.values(), int(num_edges), largest=False)
+        edges = dist.indices()[:, idx]
+        edges = to_undirected(edges)
+        edges, _ = add_self_loops(edges, num_nodes=num_nodes)
         homo = our_homophily_measure(edges, mask).item()
         if homo >= best_homo:
             best_homo = homo
