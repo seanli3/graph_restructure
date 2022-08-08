@@ -23,7 +23,7 @@ def compat_matrix_edge_idx(edge_idx, labels):
      "Generalizing GNNs Beyond Homophily"
      treats negative labels as unlabeled
      """
-    edge_index = remove_self_loops(edge_idx)[0]
+    edge_index = edge_idx
     src_node, targ_node = edge_index[0,:], edge_index[1,:]
     labeled_nodes = (labels[src_node] >= 0) * (labels[targ_node] >= 0)
     label = labels.squeeze().to(device)
@@ -92,14 +92,13 @@ def our_homophily_measure(edge_index, label):
     nonzero_label = label[label >= 0]
     counts = nonzero_label.unique(return_counts=True)[1].float()
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
-    complete_graph_edges = complete_graph_edges + torch.diag(counts)
     try:
         h = H/complete_graph_edges
     except RuntimeError as e:
         # print('Missing labels')
         return torch.tensor(0)
     h_homo = h.diag()
-    h_hete = (h.triu(1) + h.tril(-1)).mean(1)
+    h_hete = (h.triu(1) + h.tril(-1)).max()
     # ret = max(h_hete, h_homo) * (h_homo - h_hete) / density
     # return 1 / (1 + torch.exp(- ret))
     return (h_homo - h_hete).min()/2+0.5
