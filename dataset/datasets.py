@@ -102,7 +102,7 @@ def set_train_val_test_split(
 
 
 def get_dataset(name, normalize_features=False, transform=None,
-                self_loop=False, features=None, split='public', lcc=False):
+                self_loop=False, features=None, split='public', lcc=False, h_den=None):
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
     if name.lower() in ['computers', 'photo']:
         dataset = Amazon(path, name)
@@ -129,6 +129,10 @@ def get_dataset(name, normalize_features=False, transform=None,
     dataset.data.y = dataset.data.y.long()
     if features is not None:
         dataset.data.x = features
+    if h_den is not None:
+        edge_path = osp.join(osp.dirname(osp.realpath(__file__)), 'synthetic', 'sync_{}_h_den_{}_edges.pt'.format(name, h_den))
+        syn_edge_index = torch.load(edge_path)
+        dataset.data.edge_index = syn_edge_index
 
     if self_loop:
         dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]

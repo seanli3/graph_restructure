@@ -11,9 +11,8 @@ device = DEVICE
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
-    def __init__(self, data, step, name, exact, with_node_feature=True, with_rand_signal=True, sparse=False):
+    def __init__(self, data, step, exact, with_node_feature=True, with_rand_signal=True, sparse=False):
         super(SpectralSimilarityEncoder, self).__init__()
-        self.name = name
         self.step = step
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
         L = torch.sparse_coo_tensor(L_index, L_weight, device=device, size=(data.num_nodes, data.num_nodes))
@@ -28,7 +27,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             if sparse:
                 D = create_filter_sparse(L, self.step)
             else:
-                D = create_filter(L, self.step).permute(1, 2, 0)
+                D = create_filter(L, self.step).permute(1, 0, 2)
         del L
 
         if with_rand_signal:
@@ -39,44 +38,48 @@ class SpectralSimilarityEncoder(torch.nn.Module):
                 x = random_signals
         else:
             x = data.x
-        self.D = []
-        for Di in D:
-            D_x = Di.mm(x)
-            D_x = D_x.where(D_x.abs() > 1e-14, torch.tensor(0., device=device))
-            self.D.append(D_x.to_sparse_coo())
-
-        del D
 
         self.windows = math.ceil(2/self.step)
-        # self.D = torch.cat(self.D, 1).to_dense().view(x.shape[0], x.shape[1], self.windows)
-        self.D = torch.cat(self.D, 1)
 
-        self.w1 = nn.Parameter(torch.empty(self.windows*x.shape[1], 256, device=device))
-        self.w2 = nn.Parameter(torch.empty(256, 128, device=device))
-        self.w3 = nn.Parameter(torch.empty(128, 64, device=device))
+        if sparse:
+            self.D = []
+            for Di in D:
+                D_x = Di.mm(x)
+                D_x = D_x.where(D_x.abs() > 1e-14, torch.tensor(0., device=device))
+                self.D.append(D_x.to_sparse_coo())
+            self.D = torch.cat(self.D, 1)
+        else:
+            self.D = D.matmul(x).permute(0, 2, 1)
+        del D
 
-        self.outputs = {}
-
-    def get_activation(self, name):
-        def hook(module, input, output):
-            self.outputs[name] = output
-        return hook
+        self.w1 = nn.Parameter(torch.empty(self.windows, 64, device=device))
+        self.w2 = nn.Parameter(torch.empty(64, 32, device=device))
+        self.w3 = nn.Parameter(torch.empty(32, 1, device=device))
 
     def sim(self, batch):
         return dot_product(self(batch))
 
-    def dist(self, D_batch):
+    def dist(self, D_batch=None):
         emb = self(D_batch)
         d = torch.nn.functional.pdist(emb, p=2)
         return d
 
     def forward(self, D_batch):
-        x = torch.sparse.mm(D_batch, self.w1)
+        if self.sparse:
+            if D_batch is not None:
+                x = torch.sparse.mm(D_batch, self.w1)
+            else:
+                x = torch.sparse.mm(self.D, self.w1)
+        else:
+            if D_batch is not None:
+                x = self.D[D_batch].matmul(self.w1)
+            else:
+                x = self.D.matmul(self.w1)
         x = nn.functional.relu(x)
         x = x.matmul(self.w2)
         x = nn.functional.relu(x)
         x = x.matmul(self.w3)
-        return x
+        return x.squeeze()
 
     def reset_parameters(self):
         nn.init.normal_(self.w1)

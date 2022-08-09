@@ -25,10 +25,11 @@ class Rewirer(torch.nn.Module):
         self.dry_run = dry_run
         self.with_node_feature = with_node_feature
         self.with_rand_signal = with_rand_signal
+        self.sparse = True
 
-        self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, name='struct', exact=exact,
+        self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, exact=exact,
                                                           with_node_feature=with_node_feature,
-                                                          with_rand_signal=with_rand_signal, sparse=True)
+                                                          with_rand_signal=with_rand_signal, sparse=self.sparse)
         self.models = [self.struct_sim_model]
 
         self.mode = mode
@@ -203,7 +204,7 @@ class Rewirer(torch.nn.Module):
         dist = torch.load(SAVED_DISTANCE_MATRIX).coalesce()
 
         val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
-        edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask, step=edge_step)
+        edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask, step=edge_step, sparse=self.sparse)
 
         new_edge_index = edges
         new_dataset = deepcopy(dataset)

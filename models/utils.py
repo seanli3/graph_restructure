@@ -746,16 +746,22 @@ def dot_product(a):
     return sim_mt
 
 
-def find_optimal_edges(num_nodes, dist, mask, step=None):
+def find_optimal_edges(num_nodes, dist, mask, step=None, sparse=False):
     if step:
         edge_step = step
     else:
-        edge_step = int(num_nodes/10)
+        edge_step = int(num_nodes//10)
     best_homo = 0
     best_edges = torch.tensor([], device=device)
-    for num_edges in range(edge_step, min(int(num_nodes*num_nodes/2), dist.values().shape[0] ), edge_step):
-        _, idx = torch.topk(dist.values(), int(num_edges), largest=False)
-        edges = dist.indices()[:, idx]
+    max_edges = dist.values().shape[0] if sparse else dist.numel()
+    for num_edges in range(edge_step, max_edges, edge_step):
+        if sparse:
+            _, idx = torch.topk(dist.values(), int(num_edges), largest=False)
+            edges = dist.indices()[:, idx]
+        else:
+            _, idx = torch.topk(dist, int(num_edges), largest=False)
+            triu_indices = torch.triu_indices(num_nodes, num_nodes, 1, device=device)
+            edges = to_undirected(triu_indices[:, idx])
         edges = to_undirected(edges)
         edges, _ = add_self_loops(edges, num_nodes=num_nodes)
         homo = our_homophily_measure(edges, mask).item()

@@ -8,18 +8,17 @@ from sklearn.metrics import f1_score
 import numpy as np
 from tqdm import tqdm
 from dataset.datasets import get_dataset
-from models.encoder_node_classification_fast import Rewirer
+from models.encoder_node_classification import Rewirer
 from config import USE_CUDA, SEED, DEVICE
 
 device = DEVICE
 
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, run_split=None,
-        rewirer_mode='supervised', rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, model_indices=[0,1],
-        lcc=False, loss='triplet', eps='0.1', max_node_degree=5, with_node_feature=True, with_rand_signal=True,
-        edge_step=None):
+        rewirer_layers=[256, 128, 64], rewirer_step=0.2, num_edges=2000, lcc=False, eps=0.1, max_node_degree=5,
+        with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None):
 
-    dataset = get_dataset(dataset_name, normalize_features, lcc=lcc)
+    dataset = get_dataset(dataset_name, normalize_features, lcc=lcc, h_den=h_den)
     if len(dataset.data.train_mask.shape) > 1:
         splits = [run_split] if run_split is not None else range(dataset.data.train_mask.shape[1])
         has_splits = True
@@ -45,12 +44,11 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
         if rewired:
             dataset = get_dataset(dataset_name, normalize_features,
                                   transform=lambda d: Rewirer.rewire(
-                                      d, model_indices, num_edges, split if has_splits else None, loss=loss, eps=eps,
+                                      d, num_edges, split if has_splits else None, eps=eps,
                                       max_node_degree=max_node_degree, step=rewirer_step, layers=rewirer_layers,
                                       with_node_feature=with_node_feature, with_rand_signal=with_rand_signal,
                                       edge_step=edge_step
-                                  ),
-                                  lcc=lcc)
+                                  ), h_den=h_den, lcc=lcc)
 
         data = dataset[0]
 
@@ -66,7 +64,6 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
             eval_info_early_model = None
             bad_counter = 0
 
-
             # pbar = tqdm(range(0, epochs))
             pbar = range(0, epochs)
             for epoch in pbar:
@@ -76,8 +73,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                 # if epoch % 2 == 0:
                 #     pbar.set_description(
                 #         'Epoch: {}, train loss: {:.2f}, val loss: {:.2f}, train acc: {:.4f}, val acc: {:.4f},'
-                #         'test loss: {:.2f}, test acc: {:.4f}'
-                #             .format(
+                #         'test loss: {:.2f}, test acc: {:.4f}'.format(
                 #                 epoch, eval_info['train_loss'], eval_info['val_loss'], eval_info['train_acc'],
                 #                 eval_info['val_acc'], eval_info['test_loss'], eval_info['test_acc']
                 #             )
@@ -108,19 +104,19 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, duration = tensor(val_losses), tensor(train_accs), tensor(val_accs), \
                                                             tensor(test_accs), tensor(test_macro_f1s), tensor(durations)
 
-    # print('Val Loss: {:.4f} ± {:.3f}, Train Accuracy: {:.3f} ± {:.3f}, Val Accuracy: {:.3f} ± {:.3f}, Test Accuracy: {:.3f} ± {:.3f}, Macro-F1: {:.3f} ± {:.3f}, Duration: {:.3f}, Epoch: {}'.
-    #       format(val_losses.mean().item(),
-    #              val_losses.std().item(),
-    #              train_accs.mean().item(),
-    #              train_accs.std().item(),
-    #              val_accs.mean().item(),
-    #              val_accs.std().item(),
-    #              test_accs.mean().item(),
-    #              test_accs.std().item(),
-    #              test_macro_f1s.mean().item(),
-    #              test_macro_f1s.std().item(),
-    #              duration.mean().item(),
-    #              eval_info_early_model['epoch']))
+    print('Val Loss: {:.4f} ± {:.3f}, Train Accuracy: {:.3f} ± {:.3f}, Val Accuracy: {:.3f} ± {:.3f}, Test Accuracy: {:.3f} ± {:.3f}, Macro-F1: {:.3f} ± {:.3f}, Duration: {:.3f}, Epoch: {}'.
+          format(val_losses.mean().item(),
+                 val_losses.std().item(),
+                 train_accs.mean().item(),
+                 train_accs.std().item(),
+                 val_accs.mean().item(),
+                 val_accs.std().item(),
+                 test_accs.mean().item(),
+                 test_accs.std().item(),
+                 test_macro_f1s.mean().item(),
+                 test_macro_f1s.std().item(),
+                 duration.mean().item(),
+                 eval_info_early_model['epoch']))
 
     # print('row_diff:', cal_row_diff(model, data, split), 'col_diff:', cal_col_diff(model, data, split))
     print(train_accs.mean().item(), test_accs.mean().item(), val_accs.mean().item(), train_accs.std().item(),
