@@ -17,7 +17,7 @@ device = DEVICE
 
 class Rewirer(torch.nn.Module):
     def __init__(self, data, DATASET, step=0.2, layers=[128, 64], split=None, exact=False,
-                 eps=0.1, dry_run=False, with_rand_signal=True, with_node_feature=True):
+                 eps=0.1, dry_run=False, with_rand_signal=True, with_node_feature=True, h_den=None):
         super(Rewirer, self).__init__()
         self.data = data
         self.DATASET = DATASET
@@ -31,8 +31,9 @@ class Rewirer(torch.nn.Module):
                                                           with_node_feature=with_node_feature,
                                                           with_rand_signal=with_rand_signal, sparse=self.sparse)
         self.model = self.struct_sim_model
-
         self.split = split
+        self.h_den = h_den
+        self.step = step
 
     def train(self, epochs, lr, weight_decay, patience, step, sample_size):
         train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
@@ -83,11 +84,11 @@ class Rewirer(torch.nn.Module):
             model.parameters(), lr=lr, weight_decay=weight_decay
         ) if len(list(model.parameters())) > 0 else None
 
-        file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}'.format(
-            self.DATASET.lower(), self.eps, self.with_node_feature,self.with_rand_signal
-        ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_split_{}_{}_{}'.format(
-            self.DATASET.lower(), self.eps, self.split, self.with_node_feature,
-            self.with_rand_signal
+        file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_{}'.format(
+            self.DATASET.lower(), self.eps, self.with_node_feature,self.with_rand_signal, self.h_den, self.step
+        ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_split_{}_{}_{}_{}_{}'.format(
+            self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal, self.h_den,
+            self.step
         ) + '.pt'
 
         for epoch in pbar:
@@ -151,19 +152,20 @@ class Rewirer(torch.nn.Module):
 
     def load(self):
         model = self.model
-        file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}'.format(
+        file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_{}'.format(
             self.DATASET.lower(), self.eps, self.with_node_feature,
-            self.with_rand_signal
-        ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_split_{}_{}_{}'.format(
-                 self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal) + '.pt'
+            self.with_rand_signal, self.h_den, self.step
+        ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_split_{}_{}_{}_{}_{}'.format(
+                 self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal, self.h_den,
+            self.step) + '.pt'
         saved_model = torch.load(file_name, map_location=device)
         model.load_state_dict(saved_model['model'])
 
     @classmethod
-    def rewire(cls, dataset, num_edges, split, eps=0.1, max_node_degree=10,
-               step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True, edge_step=None):
-        SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/dist_mat_{}_{}_{}_{}_{}_{}_{}'.format(
-            dataset.name, split, eps, step, layers, with_node_feature, with_rand_signal
+    def rewire(cls, dataset, num_edges, split, eps=0.1, max_node_degree=10, step=0.1, layers=[256, 128, 64],
+               with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None):
+        SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/dist_mat_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+            dataset.name, split, eps, step, layers, with_node_feature, with_rand_signal, h_den, step
         ) + '.pt'
         from os.path import exists
         file_exists = exists(SAVED_DISTANCE_MATRIX)
@@ -171,7 +173,7 @@ class Rewirer(torch.nn.Module):
         if not file_exists:
             rewirer = Rewirer(
                 dataset[0], DATASET=dataset.name, step=step, layers=layers, split=split, eps=eps,
-                with_node_feature=with_node_feature, with_rand_signal=with_rand_signal)
+                with_node_feature=with_node_feature, with_rand_signal=with_rand_signal, h_den=h_den)
             rewirer.load()
             dist, D = rewirer.get_dist_matrix(max_node_degree)
             torch.save([dist, D], SAVED_DISTANCE_MATRIX)
@@ -257,5 +259,5 @@ if __name__ == "__main__":
 
     module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, split=args.split,
                      exact=args.exact, eps=args.eps, dry_run=args.dry_run, with_node_feature=args.with_node_feature,
-                     with_rand_signal=args.with_rand_signal)
+                     with_rand_signal=args.with_rand_signal, h_den=args.h_den)
     module.train(epochs=10000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step, sample_size=args.sample_size)

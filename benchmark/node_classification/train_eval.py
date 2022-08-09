@@ -10,6 +10,7 @@ from tqdm import tqdm
 from dataset.datasets import get_dataset
 from models.encoder_node_classification import Rewirer
 from config import USE_CUDA, SEED, DEVICE
+from models.utils import our_homophily_measure
 
 device = DEVICE
 
@@ -47,7 +48,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                                       d, num_edges, split if has_splits else None, eps=eps,
                                       max_node_degree=max_node_degree, step=rewirer_step, layers=rewirer_layers,
                                       with_node_feature=with_node_feature, with_rand_signal=with_rand_signal,
-                                      edge_step=edge_step
+                                      edge_step=edge_step, h_den=h_den
                                   ), h_den=h_den, lcc=lcc)
 
         data = dataset[0]
@@ -104,22 +105,22 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
     val_losses, train_accs, val_accs, test_accs, test_macro_f1s, duration = tensor(val_losses), tensor(train_accs), tensor(val_accs), \
                                                             tensor(test_accs), tensor(test_macro_f1s), tensor(durations)
 
-    print('Val Loss: {:.4f} ± {:.3f}, Train Accuracy: {:.3f} ± {:.3f}, Val Accuracy: {:.3f} ± {:.3f}, Test Accuracy: {:.3f} ± {:.3f}, Macro-F1: {:.3f} ± {:.3f}, Duration: {:.3f}, Epoch: {}'.
-          format(val_losses.mean().item(),
-                 val_losses.std().item(),
-                 train_accs.mean().item(),
-                 train_accs.std().item(),
-                 val_accs.mean().item(),
-                 val_accs.std().item(),
-                 test_accs.mean().item(),
-                 test_accs.std().item(),
-                 test_macro_f1s.mean().item(),
-                 test_macro_f1s.std().item(),
-                 duration.mean().item(),
-                 eval_info_early_model['epoch']))
+    # print('Val Loss: {:.4f} ± {:.3f}, Train Accuracy: {:.3f} ± {:.3f}, Val Accuracy: {:.3f} ± {:.3f}, Test Accuracy: {:.3f} ± {:.3f}, Macro-F1: {:.3f} ± {:.3f}, Duration: {:.3f}, Epoch: {}'.
+    #       format(val_losses.mean().item(),
+    #              val_losses.std().item(),
+    #              train_accs.mean().item(),
+    #              train_accs.std().item(),
+    #              val_accs.mean().item(),
+    #              val_accs.std().item(),
+    #              test_accs.mean().item(),
+    #              test_accs.std().item(),
+    #              test_macro_f1s.mean().item(),
+    #              test_macro_f1s.std().item(),
+    #              duration.mean().item(),
+    #              eval_info_early_model['epoch']))
 
     # print('row_diff:', cal_row_diff(model, data, split), 'col_diff:', cal_col_diff(model, data, split))
-    print(train_accs.mean().item(), test_accs.mean().item(), val_accs.mean().item(), train_accs.std().item(),
+    print(our_homophily_measure(data.edge_index, data.y).item(), train_accs.mean().item(), test_accs.mean().item(), val_accs.mean().item(), train_accs.std().item(),
           test_accs.std().item(), val_accs.std().item(), sep=',')
     return test_accs.mean().item()
 
