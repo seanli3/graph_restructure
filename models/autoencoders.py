@@ -65,7 +65,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         d = torch.nn.functional.pdist(emb, p=2)
         return d
 
-    def forward(self, D_batch):
+    def forward(self, D_batch=None):
         if D_batch is not None:
             x = self.D[D_batch].matmul(self.w1)
         else:

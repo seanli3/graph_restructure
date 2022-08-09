@@ -15,7 +15,7 @@ device = DEVICE
 
 
 class Rewirer(torch.nn.Module):
-    def __init__(self, data, DATASET, step=0.2, layers=[128, 64], mode="supervised", split=None, exact=False,
+    def __init__(self, data, DATASET, step=0.2, layers=[128, 64], split=None, exact=False,
                  loss="triplet", eps=0.1, dry_run=False, with_rand_signal=True, with_node_feature=True, h_den=None):
         super(Rewirer, self).__init__()
         self.data = data
@@ -30,9 +30,8 @@ class Rewirer(torch.nn.Module):
         self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, exact=exact,
                                                           with_node_feature=with_node_feature,
                                                           with_rand_signal=with_rand_signal, sparse=self.sparse)
-        self.models = [self.struct_sim_model]
+        self.model = self.struct_sim_model
 
-        self.mode = mode
         self.split = split
         self.h_den = h_den
         self.step = step
@@ -47,93 +46,93 @@ class Rewirer(torch.nn.Module):
         train_idx = train_mask.nonzero().view(-1)
         val_idx = val_mask.nonzero().view(-1)
 
-        for model in self.models:
-            model.reset_parameters()
-            best_loss_mean = float('inf')
-            best_model = {}
-            bad_counter = 0
+        model = self.model
+        model.reset_parameters()
+        best_loss_mean = float('inf')
+        best_model = {}
+        bad_counter = 0
 
-            pbar = tqdm(range(0, epochs))
+        pbar = tqdm(range(0, epochs))
 
-            optimizer = torch.optim.AdamW(
-                model.parameters(), lr=lr, weight_decay=weight_decay
-            ) if len(list(model.parameters())) > 0 else None
+        optimizer = torch.optim.AdamW(
+            model.parameters(), lr=lr, weight_decay=weight_decay
+        ) if len(list(model.parameters())) > 0 else None
 
-            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_{}_{}_{}_{}_{}_{}'.format(
-                self.DATASET.lower(), self.eps, self.with_node_feature, self.with_rand_signal, self.h_den, self.step
-            ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION \
-            + '/fast_{}_{}_split_{}_{}_{}_{}_{}'.format(
-                self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal, self.h_den,
-                self.step
-            ) + '.pt'
+        file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_{}_{}_{}_{}_{}_{}'.format(
+            self.DATASET.lower(), self.eps, self.with_node_feature, self.with_rand_signal, self.h_den, self.step
+        ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION \
+        + '/fast_{}_{}_split_{}_{}_{}_{}_{}'.format(
+            self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal, self.h_den,
+            self.step
+        ) + '.pt'
 
-            # batch_size = data.num_nodes
-            batch_size = 256
-            train_batches = list(gen_batches(train_idx.shape[0], batch_size, min_batch_size=1))
-            val_batches = list(gen_batches(val_idx.shape[0], batch_size, min_batch_size=1))
+        # batch_size = data.num_nodes
+        batch_size = 256
+        train_batches = list(gen_batches(train_idx.shape[0], batch_size, min_batch_size=1))
+        val_batches = list(gen_batches(val_idx.shape[0], batch_size, min_batch_size=1))
 
-            train_dist_diff_indices = []
-            val_dist_diff_indices = []
+        train_dist_diff_indices = []
+        val_dist_diff_indices = []
 
-            y = data.y.view(-1)
-            for batch in train_batches:
-                train_dist_diff_indices.append(
-                    get_distance_diff_indices_sparse(
-                        train_idx[batch], y, num_samples=sample_size
-                    )
-                )
-            for batch in val_batches:
-                val_dist_diff_indices.append(
-                    get_distance_diff_indices_sparse(
-                        val_idx[batch], y, num_samples=sample_size
-                    )
-                )
-
-            for epoch in pbar:
-                train_losses = []
-                val_losses = []
-
-                # Training
-                for batch_num, batch in enumerate(train_batches):
-                    train_loss = self.train_batch(train_dist_diff_indices[batch_num], model, optimizer,
-                                                  train_idx[batch])
-                    train_losses.append(train_loss.item())
-                # # Validation
-                for batch_num, batch in enumerate(val_batches):
-                    if len(val_dist_diff_indices[batch_num]) > 0:
-                        val_loss = self.val_batch(val_dist_diff_indices[batch_num], model, val_idx[batch])
-                        val_losses.append(val_loss.item())
-
-                # Compute loss
-                train_loss_mean = torch.tensor(train_losses).mean().item()
-                val_loss_mean = torch.tensor(val_losses).mean().item()
-                pbar.set_description('Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(
-                    epoch, train_loss_mean, val_loss_mean)
-                )
-
-                # Epoch finish
-                if val_loss_mean < best_loss_mean:
-                    best_model['train_loss'] = train_loss_mean
-                    best_model['val_loss'] = val_loss_mean
-                    best_model['epoch'] = epoch
-                    best_model['step'] = step
-                    best_model['model'] = deepcopy(model.state_dict())
-                    best_loss_mean = val_loss_mean
-                    bad_counter = 0
-                    if not self.dry_run:
-                        torch.save(
-                            best_model, file_name
-                        )
-                else:
-                    bad_counter += 1
-                    if bad_counter == patience:
-                        break
-
-            print(
-                'Model saved for Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(
-                    best_model['epoch'], best_model['train_loss'], best_model['val_loss']
+        y = data.y.view(-1)
+        for batch in train_batches:
+            train_dist_diff_indices.append(
+                get_distance_diff_indices_sparse(
+                    train_idx[batch], y, num_samples=sample_size
                 )
             )
+        for batch in val_batches:
+            val_dist_diff_indices.append(
+                get_distance_diff_indices_sparse(
+                    val_idx[batch], y, num_samples=sample_size
+                )
+            )
+
+        for epoch in pbar:
+            train_losses = []
+            val_losses = []
+
+            # Training
+            for batch_num, batch in enumerate(train_batches):
+                train_loss = self.train_batch(train_dist_diff_indices[batch_num], model, optimizer,
+                                              train_idx[batch])
+                train_losses.append(train_loss.item())
+            # # Validation
+            for batch_num, batch in enumerate(val_batches):
+                if len(val_dist_diff_indices[batch_num]) > 0:
+                    val_loss = self.val_batch(val_dist_diff_indices[batch_num], model, val_idx[batch])
+                    val_losses.append(val_loss.item())
+
+            # Compute loss
+            train_loss_mean = torch.tensor(train_losses).mean().item()
+            val_loss_mean = torch.tensor(val_losses).mean().item()
+            pbar.set_description('Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(
+                epoch, train_loss_mean, val_loss_mean)
+            )
+
+            # Epoch finish
+            if val_loss_mean < best_loss_mean:
+                best_model['train_loss'] = train_loss_mean
+                best_model['val_loss'] = val_loss_mean
+                best_model['epoch'] = epoch
+                best_model['step'] = step
+                best_model['model'] = deepcopy(model.state_dict())
+                best_loss_mean = val_loss_mean
+                bad_counter = 0
+                if not self.dry_run:
+                    torch.save(
+                        best_model, file_name
+                    )
+            else:
+                bad_counter += 1
+                if bad_counter == patience:
+                    break
+
+        print(
+            'Model saved for Epoch: {}, loss: {:.5f} val loss: {:.5f}'.format(
+                best_model['epoch'], best_model['train_loss'], best_model['val_loss']
+            )
+        )
 
     def val_batch(self, val_dist_diff_indices, model, val_idx):
         model.eval()
@@ -151,22 +150,20 @@ class Rewirer(torch.nn.Module):
         return train_loss
 
     def load(self):
-        for model in self.models:
-            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_{}_{}_{}_{}_{}_{}_{}'.format(
-                self.DATASET.lower(), self.mode, model.name, self.loss, self.eps, self.with_node_feature,
-                self.with_rand_signal
-            ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + \
-                                                 '/fast_{}_{}_{}_{}_{}_split_{}_{}_{}'.format(
-                                                     self.DATASET.lower(), self.mode, model.name, self.loss, self.eps,
-                                                     self.split,
-                                                     self.with_node_feature, self.with_rand_signal) + '.pt'
-            saved_model = torch.load(file_name, map_location=device)
-            model.load_state_dict(saved_model['model'])
+        file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_{}_{}_{}_{}_{}_{}'.format(
+            self.DATASET.lower(), self.eps, self.with_node_feature, self.with_rand_signal, self.h_den, self.step
+        ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + \
+                                             '/fast_{}_{}_split_{}_{}_{}_{}_{}'.format(
+                                                 self.DATASET.lower(), self.eps, self.split, self.with_node_feature,
+                                                 self.with_rand_signal, self.h_den, self.step) + '.pt'
+        saved_model = torch.load(file_name, map_location=device)
+        self.model.load_state_dict(saved_model['model'])
 
 
     def get_dist_matrix(self, max_node_degree):
+        model = self.model
         with torch.no_grad():
-            emb = self.models[0](self.models[0].D)
+            emb = model()
         dist = []
         for i in range(self.data.num_nodes):
             d = torch.cdist(emb[i].view(1, -1), emb)
@@ -181,18 +178,18 @@ class Rewirer(torch.nn.Module):
         return dist
 
     @classmethod
-    def rewire(cls, dataset, model_indices, num_edges, split, loss='triplet', eps='0.1', max_node_degree=100,
-               step=0.1, layers=[256, 128, 64], with_node_feature=True, with_rand_signal=True, edge_step=None):
-        SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_dist_mat_{}_{}_{}_{}_{}_{}_{}_{}'.format(
-            dataset.name, split, loss, eps, step, layers, with_node_feature, with_rand_signal
+    def rewire(cls, dataset, num_edges, split, eps=0.1, max_node_degree=100, step=0.1, layers=[256, 128, 64],
+               with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None):
+        SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_dist_mat_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
+            dataset.name, split, eps, step, layers, with_node_feature, with_rand_signal, h_den, step
         ) + '.pt'
         from os.path import exists
         file_exists = exists(SAVED_DISTANCE_MATRIX)
 
         if not file_exists:
             rewirer = Rewirer(
-                dataset[0], DATASET=dataset.name, step=step, layers=layers, mode='supervised', split=split, loss=loss,
-                eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal)
+                dataset[0], DATASET=dataset.name, step=step, layers=layers, split=split,
+                eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal, h_den=h_den)
             rewirer.load()
             dist = rewirer.get_dist_matrix(max_node_degree)
             torch.save(dist, SAVED_DISTANCE_MATRIX)
@@ -233,7 +230,6 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.05)
     parser.add_argument('--step', type=float, default=0.1)
     parser.add_argument('--split', type=int, default=None)
-    parser.add_argument('--mode', type=str, default='supervised')
     parser.add_argument('--exact', action='store_true')
     parser.add_argument('--lcc', action='store_true')
     parser.add_argument('--loss', type=str, default='triplet')

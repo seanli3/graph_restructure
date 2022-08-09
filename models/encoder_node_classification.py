@@ -153,8 +153,7 @@ class Rewirer(torch.nn.Module):
     def load(self):
         model = self.model
         file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_{}_{}_{}_{}'.format(
-            self.DATASET.lower(), self.eps, self.with_node_feature,
-            self.with_rand_signal, self.h_den, self.step
+            self.DATASET.lower(), self.eps, self.with_node_feature, self.with_rand_signal, self.h_den, self.step
         ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/{}_{}_split_{}_{}_{}_{}_{}'.format(
                  self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal, self.h_den,
             self.step) + '.pt'
