@@ -379,8 +379,8 @@ def neumann_inv_sparse(m, I, k):
         IIm = (I + I_m_pow).coalesce()
         IIm_index = IIm.indices()
         IIm_values = IIm.values()
-        IIm_index = IIm_index[:, IIm_values.abs() > 1e-14]
-        IIm_values = IIm_values[IIm_values.abs() > 1e-14]
+        IIm_index = IIm_index[:, IIm_values.abs() > 1e-6]
+        IIm_values = IIm_values[IIm_values.abs() > 1e-6]
         ret_index, ret_values = spspmm(ret_index, ret_values, IIm_index, IIm_values, size, size, size)
         # ret_index = ret_index[:, ret_values.abs() > 0.001]
         # ret_values = ret_values[ret_values.abs() > 0.001]
@@ -422,12 +422,12 @@ def create_filter_sparse(laplacian, step, order=3, neumann_order=4):
         B = B.coalesce()
         # B_index = B.indices()
         # B_values = B.values()
-        B_index = B.indices()[:, B.values().abs() > 1e-14]
-        B_values = B.values()[B.values().abs() > 1e-14]
+        B_index = B.indices()[:, B.values().abs() > 1e-3]
+        B_values = B.values()[B.values().abs() > 1e-3]
         for _ in range(1, m):
             B_index, B_values = spspmm(B_index, B_values, B_index, B_values, num_nodes, num_nodes, num_nodes, coalesced=True)
-            B_index = B_index[:, B_values.abs() > 1e-14]
-            B_values = B_values[B_values.abs() > 1e-14]
+            B_index = B_index[:, B_values.abs() > 1e-3]
+            B_values = B_values[B_values.abs() > 1e-3]
         B = torch.sparse_coo_tensor(B_index, B_values, device=device, size=(num_nodes, num_nodes))
         B = B + I / math.pow(s, m)
         ret_index, ret_values = neumann_inv_sparse(B, I, neumann_order)
@@ -750,7 +750,7 @@ def find_optimal_edges(num_nodes, dist, mask, step=None, sparse=False):
     if step:
         edge_step = step
     else:
-        edge_step = int(num_nodes//10)
+        edge_step = int(num_nodes)
     best_homo = 0
     best_edges = torch.tensor([], device=device)
     max_edges = dist.values().shape[0] if sparse else dist.numel()

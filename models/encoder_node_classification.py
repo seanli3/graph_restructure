@@ -192,8 +192,6 @@ class Rewirer(torch.nn.Module):
         new_edge_index = edges
         new_dataset = deepcopy(dataset)
 
-        G = nx.Graph(new_edge_index.T.tolist())
-        G = G.to_undirected()
         print(new_edge_index.shape[1],
               our_homophily_measure(new_edge_index, dataset[0].y).item(),
               our_homophily_measure(new_edge_index, train_mask).item(),
@@ -203,7 +201,6 @@ class Rewirer(torch.nn.Module):
               homophily(new_edge_index, dataset[0].y, method='node'),
               homophily(new_edge_index, dataset[0].y, method='edge_insensitive'),
               new_edge_index.shape[1]/dataset[0].num_nodes,
-              nx.density(G),
               sep=',',
               end=',')
 

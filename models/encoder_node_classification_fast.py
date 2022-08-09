@@ -16,7 +16,7 @@ device = DEVICE
 
 class Rewirer(torch.nn.Module):
     def __init__(self, data, DATASET, step=0.2, layers=[128, 64], mode="supervised", split=None, exact=False,
-                 loss="triplet", eps=0.1, dry_run=False, with_rand_signal=True, with_node_feature=True):
+                 loss="triplet", eps=0.1, dry_run=False, with_rand_signal=True, with_node_feature=True, h_den=None):
         super(Rewirer, self).__init__()
         self.data = data
         self.DATASET = DATASET
@@ -34,6 +34,8 @@ class Rewirer(torch.nn.Module):
 
         self.mode = mode
         self.split = split
+        self.h_den = h_den
+        self.step = step
 
     def train(self, epochs, lr, weight_decay, patience, step, sample_size):
         train_mask = self.data.train_mask[:, self.split] if self.split is not None else self.data.train_mask
@@ -57,24 +59,21 @@ class Rewirer(torch.nn.Module):
                 model.parameters(), lr=lr, weight_decay=weight_decay
             ) if len(list(model.parameters())) > 0 else None
 
-            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_{}_{}_{}_{}_{}_{}_{}'.format(
-                self.DATASET.lower(), self.mode, model.name, self.loss,
-                self.eps, self.with_node_feature, self.with_rand_signal
+            file_name = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_{}_{}_{}_{}_{}_{}'.format(
+                self.DATASET.lower(), self.eps, self.with_node_feature, self.with_rand_signal, self.h_den, self.step
             ) + '.pt' if self.split is None else SAVED_MODEL_DIR_NODE_CLASSIFICATION \
-            + '/fast_{}_{}_{}_{}_{}_split_{}_{}_{}'.format(
-                self.DATASET.lower(), self.mode, model.name, self.loss,
-                self.eps, self.split, self.with_node_feature, self.with_rand_signal
+            + '/fast_{}_{}_split_{}_{}_{}_{}_{}'.format(
+                self.DATASET.lower(), self.eps, self.split, self.with_node_feature, self.with_rand_signal, self.h_den,
+                self.step
             ) + '.pt'
 
             # batch_size = data.num_nodes
-            batch_size = 1024
+            batch_size = 256
             train_batches = list(gen_batches(train_idx.shape[0], batch_size, min_batch_size=1))
             val_batches = list(gen_batches(val_idx.shape[0], batch_size, min_batch_size=1))
 
             train_dist_diff_indices = []
             val_dist_diff_indices = []
-            train_D_batch = []
-            val_D_batch = []
 
             y = data.y.view(-1)
             for batch in train_batches:
@@ -83,14 +82,12 @@ class Rewirer(torch.nn.Module):
                         train_idx[batch], y, num_samples=sample_size
                     )
                 )
-                train_D_batch.append(model.D.index_select(0, train_idx[batch]))
             for batch in val_batches:
                 val_dist_diff_indices.append(
                     get_distance_diff_indices_sparse(
                         val_idx[batch], y, num_samples=sample_size
                     )
                 )
-                val_D_batch.append(model.D.index_select(0, val_idx[batch]))
 
             for epoch in pbar:
                 train_losses = []
@@ -99,13 +96,12 @@ class Rewirer(torch.nn.Module):
                 # Training
                 for batch_num, batch in enumerate(train_batches):
                     train_loss = self.train_batch(train_dist_diff_indices[batch_num], model, optimizer,
-                                                  train_idx[batch], train_D_batch[batch_num])
+                                                  train_idx[batch])
                     train_losses.append(train_loss.item())
                 # # Validation
                 for batch_num, batch in enumerate(val_batches):
                     if len(val_dist_diff_indices[batch_num]) > 0:
-                        val_loss = self.val_batch(val_dist_diff_indices[batch_num], model, val_idx[batch],
-                                                  val_D_batch[batch_num])
+                        val_loss = self.val_batch(val_dist_diff_indices[batch_num], model, val_idx[batch])
                         val_losses.append(val_loss.item())
 
                 # Compute loss
@@ -139,16 +135,16 @@ class Rewirer(torch.nn.Module):
                 )
             )
 
-    def val_batch(self, val_dist_diff_indices, model, val_idx, D_batch):
+    def val_batch(self, val_dist_diff_indices, model, val_idx):
         model.eval()
-        x_hat = model.dist(D_batch)
+        x_hat = model.dist(val_idx)
         val_loss = model.dist_triplet_loss(x_hat, val_dist_diff_indices, val_idx.shape[0], self.eps)
         return val_loss
 
-    def train_batch(self, train_dist_diff_indices, model, optimizer, train_idx, D_batch):
+    def train_batch(self, train_dist_diff_indices, model, optimizer, train_idx):
         model.train()
         optimizer.zero_grad()
-        x_hat = model.dist(D_batch)
+        x_hat = model.dist(train_idx)
         train_loss = model.dist_triplet_loss(x_hat, train_dist_diff_indices, train_idx.shape[0], self.eps)
         train_loss.backward()
         optimizer.step()

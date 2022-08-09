@@ -45,9 +45,10 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             self.D = []
             for Di in D:
                 D_x = Di.mm(x)
-                D_x = D_x.where(D_x.abs() > 1e-14, torch.tensor(0., device=device))
+                D_x = D_x.where(D_x.abs() > 1e-8, torch.tensor(0., device=device))
                 self.D.append(D_x.to_sparse_coo())
-            self.D = torch.cat(self.D, 1)
+            self.D = torch.stack(self.D, 2)
+            self.D = self.D.to_dense()
         else:
             self.D = D.matmul(x).permute(0, 2, 1)
         del D
@@ -65,16 +66,10 @@ class SpectralSimilarityEncoder(torch.nn.Module):
         return d
 
     def forward(self, D_batch):
-        if self.sparse:
-            if D_batch is not None:
-                x = torch.sparse.mm(D_batch, self.w1)
-            else:
-                x = torch.sparse.mm(self.D, self.w1)
+        if D_batch is not None:
+            x = self.D[D_batch].matmul(self.w1)
         else:
-            if D_batch is not None:
-                x = self.D[D_batch].matmul(self.w1)
-            else:
-                x = self.D.matmul(self.w1)
+            x = self.D.matmul(self.w1)
         x = nn.functional.relu(x)
         x = x.matmul(self.w2)
         x = nn.functional.relu(x)
