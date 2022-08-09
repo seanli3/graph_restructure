@@ -92,8 +92,6 @@ def our_homophily_measure(edge_index, label):
     nonzero_label = label[label >= 0]
     counts = nonzero_label.unique(return_counts=True)[1].float()
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
-    complete_graph_edges.fill_diagonal_(0)
-    complete_graph_edges += torch.diag(counts*(counts+1)/2)
     try:
         h = H/complete_graph_edges
     except RuntimeError as e:

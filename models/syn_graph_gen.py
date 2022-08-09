@@ -31,11 +31,14 @@ def generate_graph_edges(y, h_den, min_density=None, start_edges=None):
                 intra = False
 
             if intra is True:
-                n = np.random.choice((y == i).logical_and(A[idx] == 0).nonzero().view(-1).cpu())
+                cand = (y == i).logical_and(A[idx] == 0)
             else:
-                n = np.random.choice((y != i).logical_and(A[idx] == 0).nonzero().view(-1).cpu())
-            A[idx, n] = 1
-            A[n, idx] = 1
+                cand = (y != i).logical_and(A[idx] == 0)
+
+            if cand.any():
+                n = np.random.choice(cand.nonzero().view(-1).cpu())
+                A[idx, n] = 1
+                A[n, idx] = 1
 
 
 if __name__ == "__main__":
