@@ -750,7 +750,7 @@ def find_optimal_edges(num_nodes, dist, mask, step=None, sparse=False):
     if step:
         edge_step = step
     else:
-        edge_step = int(num_nodes)
+        edge_step = int(num_nodes/2)
     best_homo = 0
     best_edges = torch.tensor([], device=device)
     max_edges = dist.values().shape[0] if sparse else dist.numel()

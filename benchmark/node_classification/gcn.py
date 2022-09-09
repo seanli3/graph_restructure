@@ -21,16 +21,14 @@ parser.add_argument('--dropout', type=float, default=0.9)
 parser.add_argument('--normalize_features', type=bool, default=True)
 parser.add_argument('--rewired', action='store_true')
 parser.add_argument('--rewirer_step', type=float, default=0.2)
-parser.add_argument('--model_indices', nargs="+", type=int, default=[0,1])
 parser.add_argument('--num_edges', type=float, default=3000)
-parser.add_argument('--rewirer_mode', type=str, default='supervised')
 parser.add_argument('--lcc', action='store_true')
-parser.add_argument('--loss', type=str, default='triplet')
 parser.add_argument('--eps', type=float, default=0.1)
 parser.add_argument('--max_node_degree', type=int, default=10)
 parser.add_argument('--with_node_feature', action='store_true')
 parser.add_argument('--with_rand_signal', action='store_true')
 parser.add_argument('--edge_step', type=int, default=None)
+parser.add_argument('--h_den', type=float, default=None)
 args = parser.parse_args()
 
 
@@ -66,7 +64,6 @@ class Net(torch.nn.Module):
         return F.log_softmax(x, dim=1), x
 
 run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
-    run_split=args.run_split, num_edges=args.num_edges, model_indices=args.model_indices,
-    rewirer_mode=args.rewirer_mode, rewirer_step=args.rewirer_step, lcc=args.lcc, loss=args.loss, eps=args.eps,
-    max_node_degree=args.max_node_degree, with_node_feature=args.with_node_feature,
-    with_rand_signal=args.with_rand_signal, edge_step=args.edge_step)
+    run_split=args.run_split, num_edges=args.num_edges, rewirer_step=args.rewirer_step, lcc=args.lcc,
+    eps=args.eps, max_node_degree=args.max_node_degree, with_node_feature=args.with_node_feature,
+    with_rand_signal=args.with_rand_signal, edge_step=args.edge_step, h_den=args.h_den)
