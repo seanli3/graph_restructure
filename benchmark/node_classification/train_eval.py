@@ -8,7 +8,7 @@ from sklearn.metrics import f1_score
 import numpy as np
 from tqdm import tqdm
 from dataset.datasets import get_dataset
-from models.encoder_node_classification import Rewirer
+from models.encoder_node_classification_fast import Rewirer
 from config import USE_CUDA, SEED, DEVICE
 from models.utils import our_homophily_measure
 

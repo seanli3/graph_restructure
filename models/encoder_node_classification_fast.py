@@ -13,6 +13,8 @@ from sklearn.utils import gen_batches
 
 device = DEVICE
 
+sparse = False
+
 
 class Rewirer(torch.nn.Module):
     def __init__(self, data, DATASET, step=0.2, layers=[128, 64], split=None, exact=False,
@@ -25,11 +27,10 @@ class Rewirer(torch.nn.Module):
         self.dry_run = dry_run
         self.with_node_feature = with_node_feature
         self.with_rand_signal = with_rand_signal
-        self.sparse = True
 
         self.struct_sim_model = SpectralSimilarityEncoder(data, step=step, exact=exact,
                                                           with_node_feature=with_node_feature,
-                                                          with_rand_signal=with_rand_signal, sparse=self.sparse)
+                                                          with_rand_signal=with_rand_signal, sparse=sparse)
         self.model = self.struct_sim_model
 
         self.split = split
@@ -161,21 +162,15 @@ class Rewirer(torch.nn.Module):
 
 
     def get_dist_matrix(self, max_node_degree):
+        triu_indices = torch.triu_indices(self.data.num_nodes, self.data.num_nodes, 1)
         model = self.model
-        with torch.no_grad():
-            emb = model()
-        dist = []
-        for i in range(self.data.num_nodes):
-            d = torch.cdist(emb[i].view(1, -1), emb)
-            d_topk = torch.topk(d, max_node_degree, largest=False)
-            d_vec = torch.sparse_coo_tensor(
-                (torch.zeros(max_node_degree).tolist(), d_topk.indices.view(-1).tolist()),
-                d_topk.values.view(-1),
-                device=device, size=(1, self.data.num_nodes)
-            )
-            dist.append(d_vec)
-        dist = torch.cat(dist, 0)
-        return dist
+        model.to(device)
+        dist = model.dist()
+        D = torch.zeros(self.data.num_nodes, self.data.num_nodes, device=device)
+        D[triu_indices[0], triu_indices[1]] = dist
+        D = D + D.T
+        D.fill_diagonal_(9e15)
+        return dist, D
 
     @classmethod
     def rewire(cls, dataset, num_edges, split, eps=0.1, max_node_degree=100, step=0.1, layers=[256, 128, 64],
@@ -191,13 +186,15 @@ class Rewirer(torch.nn.Module):
                 dataset[0], DATASET=dataset.name, step=step, layers=layers, split=split,
                 eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal, h_den=h_den)
             rewirer.load()
-            dist = rewirer.get_dist_matrix(max_node_degree)
-            torch.save(dist, SAVED_DISTANCE_MATRIX)
+            dist, D = rewirer.get_dist_matrix(max_node_degree)
+            torch.save([dist, D], SAVED_DISTANCE_MATRIX)
 
-        dist = torch.load(SAVED_DISTANCE_MATRIX).coalesce()
-
-        val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
-        edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask, step=edge_step, sparse=self.sparse)
+        dist, D = torch.load(SAVED_DISTANCE_MATRIX)
+        if split is not None:
+            val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
+        else:
+            val_mask = dataset[0].y.where(dataset[0].val_mask, torch.tensor(-1, device=device))
+        edges = find_optimal_edges(dataset.data.num_nodes, dist, val_mask.view(-1), step=edge_step, sparse=sparse)
 
         new_edge_index = edges
         new_dataset = deepcopy(dataset)
@@ -205,17 +202,29 @@ class Rewirer(torch.nn.Module):
         print(new_edge_index.shape[1],
               our_homophily_measure(new_edge_index, dataset[0].y).item(),
               our_homophily_measure(
-                  new_edge_index, dataset[0].y.where(dataset[0].train_mask[:, split], torch.tensor(-1, device=device))
+                  new_edge_index,
+                  dataset[0].y.where(
+                      dataset[0].train_mask[:, split] if split is not None else dataset[0].train_mask,
+                      torch.tensor(-1, device=device)
+                  )
               ).item(),
               our_homophily_measure(
-                  new_edge_index, dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
+                  new_edge_index,
+                  dataset[0].y.where(
+                      dataset[0].val_mask[:, split] if split is not None else dataset[0].val_mask,
+                      torch.tensor(-1, device=device)
+                  )
               ).item(),
               our_homophily_measure(
-                  new_edge_index, dataset[0].y.where(dataset[0].test_mask[:, split], torch.tensor(-1, device=device))
+                  new_edge_index,
+                  dataset[0].y.where(
+                      dataset[0].test_mask[:, split] if split is not None else dataset[0].test_mask,
+                      torch.tensor(-1, device=device)
+                  )
               ).item(),
               homophily(new_edge_index, dataset[0].y, method='edge'),
               homophily(new_edge_index, dataset[0].y, method='node'),
-              homophily(new_edge_index, dataset[0].y, method='edge_insensitive'),
+              ' ',
               new_edge_index.shape[1] / dataset[0].num_nodes,
               sep=',',
               end=',')
@@ -243,8 +252,8 @@ if __name__ == "__main__":
     if args.loss not in ['triplet', 'contrastive', 'npair', 'mse']:
         raise RuntimeError('loss has to be one of triplet, contrastive, npair, mse')
 
-    print('Running rewire on {}, with lr={} step={} split={} mode={} lcc={} loss={} eps={} dry_run={} sample_size={}'
-          .format(args.dataset, args.lr, args.step, args.split, args.mode, args.lcc, args.loss, args.eps, args.dry_run,
+    print('Running rewire on {}, with lr={} step={} split={} lcc={} loss={} eps={} dry_run={} sample_size={}'
+          .format(args.dataset, args.lr, args.step, args.split, args.lcc, args.loss, args.eps, args.dry_run,
                   args.sample_size))
 
     DATASET = args.dataset
@@ -262,7 +271,7 @@ if __name__ == "__main__":
     dataset = get_dataset(DATASET, normalize_features=True, lcc=args.lcc, split="public")
     data = dataset[0]
 
-    module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, mode=args.mode, split=args.split,
+    module = Rewirer(data, step=args.step, layers=[256, 128, 64], DATASET=DATASET, split=args.split,
                      exact=args.exact, loss=args.loss, eps=args.eps, dry_run=args.dry_run,
                      with_node_feature=args.with_node_feature, with_rand_signal=args.with_rand_signal)
     module.train(epochs=1000, lr=args.lr, weight_decay=0.0005, patience=100, step=args.step,
