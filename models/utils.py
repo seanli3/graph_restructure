@@ -774,6 +774,7 @@ def find_optimal_edges(num_nodes, dist, mask, step=None, sparse=False):
         edges = to_undirected(edges)
         edges, _ = add_self_loops(edges, num_nodes=num_nodes)
         homo = our_homophily_measure(edges, mask).item()
+        print('edges: {}, best_edges: {}, step: {}, homo: {}, best_homo: {}'.format(edges, best_edges, edge_step, homo, best_homo))
         if homo >= best_homo:
             best_homo = homo
             best_edges = edges

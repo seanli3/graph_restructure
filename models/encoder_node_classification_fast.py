@@ -173,7 +173,7 @@ class Rewirer(torch.nn.Module):
         return dist, D
 
     @classmethod
-    def rewire(cls, dataset, num_edges, split, eps=0.1, max_node_degree=100, step=0.1, layers=[256, 128, 64],
+    def rewire(cls, dataset, split, eps=0.1, max_node_degree=100, step=0.1, layers=[256, 128, 64],
                with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None):
         SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/fast_dist_mat_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             dataset.name, split, eps, step, layers, with_node_feature, with_rand_signal, h_den, step
@@ -182,6 +182,7 @@ class Rewirer(torch.nn.Module):
         file_exists = exists(SAVED_DISTANCE_MATRIX)
 
         if not file_exists:
+            print('{} does not exist, creating...'.format(SAVED_DISTANCE_MATRIX))
             rewirer = Rewirer(
                 dataset[0], DATASET=dataset.name, step=step, layers=layers, split=split,
                 eps=eps, with_node_feature=with_node_feature, with_rand_signal=with_rand_signal, h_den=h_den)
@@ -189,6 +190,7 @@ class Rewirer(torch.nn.Module):
             dist, D = rewirer.get_dist_matrix(max_node_degree)
             torch.save([dist, D], SAVED_DISTANCE_MATRIX)
 
+        print('Found {}, loading ...'.format(SAVED_DISTANCE_MATRIX))
         dist, D = torch.load(SAVED_DISTANCE_MATRIX)
         if split is not None:
             val_mask = dataset[0].y.where(dataset[0].val_mask[:, split], torch.tensor(-1, device=device))
