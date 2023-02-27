@@ -161,7 +161,7 @@ class Rewirer(torch.nn.Module):
         model.load_state_dict(saved_model['model'])
 
     @classmethod
-    def rewire(cls, dataset, num_edges, split, eps=0.1, max_node_degree=10, step=0.1, layers=[256, 128, 64],
+    def rewire(cls, dataset, split, eps=0.1, max_node_degree=10, step=0.1, layers=[256, 128, 64],
                with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None):
         SAVED_DISTANCE_MATRIX = SAVED_MODEL_DIR_NODE_CLASSIFICATION + '/dist_mat_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(
             dataset.name, split, eps, step, layers, with_node_feature, with_rand_signal, h_den, step

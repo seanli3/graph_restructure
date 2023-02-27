@@ -66,7 +66,7 @@ class Net(torch.nn.Module):
 
 
 run(args.dataset, Net, args.rewired, args.runs, args.epochs, args.lr, args.weight_decay, args.patience,
-    run_split=args.run_split, num_edges=args.num_edges, rewirer_step=args.rewirer_step, max_node_degree=args.max_node_degree,
+    run_split=args.run_split, rewirer_step=args.rewirer_step, max_node_degree=args.max_node_degree,
     with_node_feature=args.with_node_feature, with_rand_signal=args.with_rand_signal, edge_step=args.edge_step)
 
 

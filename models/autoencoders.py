@@ -27,7 +27,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
             if sparse:
                 D = create_filter_sparse(L, self.step)
             else:
-                print('creating simple filters')
+                # print('creating simple filters')
                 D = create_filter(L, self.step, simple=simple).permute(1, 0, 2)
         del L
 
