@@ -17,9 +17,9 @@ device = DEVICE
 
 def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, normalize_features=True, run_split=None,
         rewirer_layers=[256, 128, 64], rewirer_step=0.2, lcc=False, eps=0.1, max_node_degree=5,
-        with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None):
+        with_node_feature=True, with_rand_signal=True, edge_step=None, h_den=None, self_loop=False):
 
-    dataset = get_dataset(dataset_name, normalize_features, lcc=lcc, h_den=h_den)
+    dataset = get_dataset(dataset_name, normalize_features, lcc=lcc, h_den=h_den, self_loop=self_loop)
     if len(dataset.data.train_mask.shape) > 1:
         splits = [run_split] if run_split is not None else range(dataset.data.train_mask.shape[1])
         has_splits = True
@@ -49,7 +49,7 @@ def run(dataset_name, Model, rewired, runs, epochs, lr, weight_decay, patience, 
                                       max_node_degree=max_node_degree, step=rewirer_step, layers=rewirer_layers,
                                       with_node_feature=with_node_feature, with_rand_signal=with_rand_signal,
                                       edge_step=edge_step, h_den=h_den
-                                  ), h_den=h_den, lcc=lcc)
+                                  ), h_den=h_den, lcc=lcc, self_loop=self_loop)
 
         data = dataset[0]
 
