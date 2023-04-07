@@ -10,6 +10,7 @@ from torch_scatter import scatter_add
 from torch_geometric.utils import remove_self_loops
 from config import DEVICE
 from torch_sparse import spspmm
+import torch.nn.functional as F
 
 
 device = DEVICE
@@ -90,13 +91,13 @@ def our_homophily_measure(edge_index, label):
     label = label.squeeze()
     H = compat_matrix_edge_idx(edge_index, label)
     nonzero_label = label[label >= 0]
-    counts = nonzero_label.unique(return_counts=True)[1].float()
+    c = nonzero_label.max() + 1
+    counts = F.one_hot(nonzero_label.long(), c).sum(0).float()
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
     try:
-        h = H/complete_graph_edges
+        h = H[counts!=0,:][:,counts!=0]/complete_graph_edges[counts!=0,:][:,counts!=0]
     except RuntimeError as e:
-        # print('Missing labels')
-        return torch.tensor(0)
+        raise RuntimeError('Missing labels')
     h_homo = h.diag()
     h_hete = (h.triu(1) + h.tril(-1)).max(0).values
     # ret = max(h_hete, h_homo) * (h_homo - h_hete) / density
@@ -774,7 +775,7 @@ def find_optimal_edges(num_nodes, dist, mask, step=None, sparse=False):
         edges = to_undirected(edges)
         edges, _ = add_self_loops(edges, num_nodes=num_nodes)
         homo = our_homophily_measure(edges, mask).item()
-        # print('edges: {}, best_edges: {}, step: {}, homo: {}, best_homo: {}'.format(edges, best_edges, edge_step, homo, best_homo))
+        # print('edges: {}, best_edges: {}, step: {}, homo: {:.4f}, best_homo: {:.4f}'.format(edges.numel()/2, best_edges.numel()/2, edge_step, homo, best_homo))
         if homo >= best_homo:
             best_homo = homo
             best_edges = edges

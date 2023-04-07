@@ -134,9 +134,6 @@ def get_dataset(name, normalize_features=False, transform=None,
         syn_edge_index = torch.load(edge_path)
         dataset.data.edge_index = syn_edge_index
 
-    if self_loop:
-        dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]
-
     if not is_undirected(dataset.data.edge_index):
         dataset.data.edge_index = to_undirected(dataset.data.edge_index)
         if hasattr(dataset[0], 'adj_t'):
@@ -183,5 +180,7 @@ def get_dataset(name, normalize_features=False, transform=None,
             d.to(device)
     if transform:
         dataset = transform(dataset)
+    if self_loop:
+        dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]
 
     return dataset
