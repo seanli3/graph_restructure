@@ -20,10 +20,10 @@ torchvision=0.12.0
 ```
 
 ## Pre-processing
-Run `run_rewire.sh`, this may take some time
+Run `run_rewirer.sh`, this may take some time
 
 ## Main results
-To reproduce results in Table 1, Figure 5 and Figure 6, open the relevant `run_*.sh` file, uncomment the lines you want to run and execute the script
+To reproduce results in Table 1, Figure 5 and Figure 6, open the relevant `run_gcn.sh` file, uncomment the lines you want to run and execute the script
 
 ## Appendix
 To reproduce results of Figure 7, Table 3 and Figure 8, run `spectral_analysis.py` in the `appendix` directory.

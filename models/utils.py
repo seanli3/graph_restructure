@@ -356,8 +356,8 @@ def neumann_inv(m, k):
     ret = I
     for l in range(k):
         ret = ret.matmul(I + (I-m).matrix_power(int(math.pow(2,l))))
-    if ret.isnan().any() or ret.isinf().any():
-        raise RuntimeError('NaN or Inf in Neumann approximation, try reduce order')
+        if ret.isnan().any() or ret.isinf().any():
+            raise RuntimeError('NaN or Inf in Neumann approximation, try reduce order')
     return ret
 
 
@@ -390,30 +390,21 @@ def neumann_inv_sparse(m, I, k):
     return ret_index, ret_values
 
 
-def create_filter(laplacian, step, order=3, neumann_order=10, simple=False):
+def create_filter(laplacian, step, order=3, neumann_order=5):
     num_nodes = laplacian.shape[0]
     a = torch.arange(-step/2, 2-step/2, step, device=device).view(-1, 1, 1)
-    if simple:
-        s = 4/step
-    else:
-        s = 1/step
-        m = order*2
-        e = 2*math.pow(s, 2*m)/(math.pow(s, 2*m)-1)-2 + 1e-6
+    s = 2/step
+    m = order*2
+    e = 1e-6
 
     if len(laplacian.shape) > 1:
         I = torch.eye(num_nodes, device=device)
-        if simple:
-            B = ((laplacian - a * I) / (2 + e)).matrix_power(m) + I / math.pow(s, m)
-            ret = neumann_inv(B, neumann_order)
-            # ret = B.matrix_power(-1)
-            ret = (I / math.pow(s, m)).matmul(ret)
-        else:
-            ret = I - (s*(laplacian - a*I)).matrix_power(2)
+        B = ((laplacian - a * I) / (2 + e)).matrix_power(m) + I / math.pow(s, m)
+        ret = neumann_inv(B, neumann_order)
+        # ret = B.matrix_power(-1)
+        ret = (I / math.pow(s, m)).matmul(ret)
     else:
-        if simple:
-            ret = 1/s.pow(m)*(((laplacian - a)/(2+e)).pow(m) + 1/s.pow(m)).pow(-1)
-        else:
-            ret = 1 - (s*(laplacian - a)).pow(2)
+        ret = 1 - (s*(laplacian - a)).pow(2)
     return ret.float()
 
 def create_filter_sparse(laplacian, step, order=3, neumann_order=4):

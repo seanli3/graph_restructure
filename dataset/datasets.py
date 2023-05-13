@@ -134,11 +134,6 @@ def get_dataset(name, normalize_features=False, transform=None,
         syn_edge_index = torch.load(edge_path)
         dataset.data.edge_index = syn_edge_index
 
-    if not is_undirected(dataset.data.edge_index):
-        dataset.data.edge_index = to_undirected(dataset.data.edge_index)
-        if hasattr(dataset[0], 'adj_t'):
-            dataset.data.adj_t = dataset[0].adj_t.to_symmetric()
-
     if not hasattr(dataset[0], 'train_mask'):
         split_idx = dataset.get_idx_split()
         dataset.data.train_mask = split_idx['train'].to(device)
@@ -178,9 +173,16 @@ def get_dataset(name, normalize_features=False, transform=None,
     if hasattr(dataset, '_data_list') and dataset._data_list:
         for d in dataset._data_list:
             d.to(device)
+
+    if not is_undirected(dataset.data.edge_index):
+        dataset.data.edge_index = to_undirected(dataset.data.edge_index)
+        if hasattr(dataset[0], 'adj_t'):
+            dataset.data.adj_t = dataset[0].adj_t.to_symmetric()
+
+    # if self_loop:
+    #     dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]
+
     if transform:
         dataset = transform(dataset)
-    if self_loop:
-        dataset.data.edge_index = add_self_loops(dataset.data.edge_index)[0]
 
     return dataset

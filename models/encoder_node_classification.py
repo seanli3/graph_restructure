@@ -191,7 +191,7 @@ class Rewirer(torch.nn.Module):
         new_edge_index = edges
         new_dataset = deepcopy(dataset)
 
-        print(new_edge_index.shape[1],
+        print(step, new_edge_index.shape[1],
               our_homophily_measure(new_edge_index, dataset[0].y).item(),
               our_homophily_measure(new_edge_index, train_mask).item(),
               our_homophily_measure(new_edge_index, val_mask).item(),

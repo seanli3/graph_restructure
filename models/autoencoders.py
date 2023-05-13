@@ -11,7 +11,7 @@ device = DEVICE
 
 
 class SpectralSimilarityEncoder(torch.nn.Module):
-    def __init__(self, data, step, exact, with_node_feature=True, with_rand_signal=True, sparse=False, simple=False):
+    def __init__(self, data, step, exact, with_node_feature=True, with_rand_signal=True, sparse=False):
         super(SpectralSimilarityEncoder, self).__init__()
         self.step = step
         L_index, L_weight = get_laplacian(data.edge_index, normalization='sym')
@@ -28,7 +28,7 @@ class SpectralSimilarityEncoder(torch.nn.Module):
                 D = create_filter_sparse(L, self.step)
             else:
                 # print('creating simple filters')
-                D = create_filter(L, self.step, simple=simple).permute(1, 0, 2)
+                D = create_filter(L, self.step).permute(1, 0, 2)
         del L
 
         if with_rand_signal:
