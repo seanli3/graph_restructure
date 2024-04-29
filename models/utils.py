@@ -94,6 +94,7 @@ def our_homophily_measure(edge_index, label):
     c = nonzero_label.max() + 1
     counts = F.one_hot(nonzero_label.long(), c).sum(0).float()
     complete_graph_edges = counts.view(-1,1).mm(counts.view(1, -1))
+    complete_graph_edges.diag() / 2 + counts
     try:
         h = H[counts!=0,:][:,counts!=0]/complete_graph_edges[counts!=0,:][:,counts!=0]
     except RuntimeError as e:
